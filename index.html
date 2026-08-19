@@ -259,7 +259,7 @@ async function callAI({ system, user, maxTokens=1024 }) {
   if (provider === 'gemini') {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
       method: 'POST', headers: { 'content-type':'application/json' },
-      body: JSON.stringify({ system_instruction:{ parts:[{ text:system }] }, contents:[{ role:'user', parts:[{ text:user }] }], generationConfig:{ maxOutputTokens:maxTokens, thinkingConfig:{ thinkingBudget:0 } } })
+      body: JSON.stringify({ system_instruction:{ parts:[{ text:system }] }, contents:[{ role:'user', parts:[{ text:user }] }], generationConfig:{ maxOutputTokens:maxTokens } })
     });
     if (!res.ok) throw new Error(`Gemini API 오류 (${res.status}): ${(await res.text()).slice(0,200)}`);
     const data = await res.json();
@@ -1009,7 +1009,7 @@ async function generateDailyAnalysis(silent) {
   const userPrompt = `[오늘 날짜] ${todayStr()}\n[시장 지표 등락률]\n${marketText}\n\n[나의 투자 원칙]\n${principlesText}\n\n[내 포트폴리오 현황(종목별 수익률)]\n${portfolioText}\n\n[누적 실현손익] ${Math.round(realized.pnl).toLocaleString()}원\n\n위 정보를 바탕으로 오늘 하루 참고할 짧은 데일리 코멘트를 작성해줘.`;
 
   try {
-    const text = (await callAI({ system: systemPrompt, user: userPrompt, maxTokens: 400 })).trim();
+    const text = (await callAI({ system: systemPrompt, user: userPrompt, maxTokens: 2000 })).trim();
     state.dailyAnalysis = { date: todayStr(), text: text || '분석을 생성하지 못했습니다.' };
     save(LS.dailyAnalysis, state.dailyAnalysis);
     if (currentTab === 'dashboard') renderers.dashboard();
@@ -1446,7 +1446,7 @@ async function runFactCheck() {
   const userPrompt = `[나의 투자 원칙]\n${principlesText}\n\n[현재 포트폴리오 요약]\n총 평가금액: ${Math.round(stats.totalValue).toLocaleString()}원, 누적 수익률: ${stats.returnPct.toFixed(1)}%\n${portfolioText}\n\n[최근 투자 일지]\n${recentJournal}\n\n[지금 하려는 투자]\n종목: ${ticker}\n예정 금액: ${amount ? Math.round(+amount).toLocaleString()+'원' : '미입력'}\n이유: ${reason}\n\n위 정보를 바탕으로 이 투자가 나의 원칙에 부합하는지 JSON으로만 답변하세요.`;
 
   try {
-    const text = await callAI({ system: systemPrompt, user: userPrompt, maxTokens: 1024 });
+    const text = await callAI({ system: systemPrompt, user: userPrompt, maxTokens: 2500 });
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('AI 응답을 해석할 수 없습니다.');
     const result = JSON.parse(jsonMatch[0]);
