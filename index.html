@@ -152,7 +152,7 @@ const REORDERABLE = ['dashboard','portfolio','journal','principles','settings','
 /* ================= AI PROVIDERS (멀티 AI 연동 + 키 자동인식) ================= */
 const AI_PROVIDERS = {
   claude: { label:'Claude', keyPlaceholder:'sk-ant-...', defaultModel:'claude-sonnet-5', modelSuggestions:['claude-sonnet-5','claude-opus-5','claude-haiku-4-5-20251001'] },
-  gemini: { label:'Gemini', keyPlaceholder:'AIza...', defaultModel:'gemini-2.5-flash', modelSuggestions:['gemini-2.5-flash','gemini-3.1-pro-preview','gemini-2.5-pro'] },
+  gemini: { label:'Gemini', keyPlaceholder:'AIza...', defaultModel:'gemini-3.6-flash', modelSuggestions:['gemini-3.6-flash','gemini-2.5-flash','gemini-3.1-pro-preview'] },
   openai: { label:'ChatGPT', keyPlaceholder:'sk-...', defaultModel:'gpt-4.1', modelSuggestions:['gpt-5','gpt-4.1','gpt-4o-mini'] },
   grok: { label:'Grok', keyPlaceholder:'xai-...', defaultModel:'grok-4', modelSuggestions:['grok-4','grok-3'] }
 };
@@ -205,14 +205,14 @@ let state = {
   newsKeywords: load(LS.newsKeywords, []),
   newsCache: load(LS.newsCache, {}),
   profile: load(LS.profile, null),
-  settings: load(LS.settings, { provider:'claude', apiKeys:{claude:'',gemini:'',openai:'',grok:''}, models:{claude:'claude-sonnet-5',gemini:'gemini-2.5-flash',openai:'gpt-4.1',grok:'grok-4'}, twelveDataKey:'', newsApiKey:'', tabOrder: REORDERABLE.slice() })
+  settings: load(LS.settings, { provider:'claude', apiKeys:{claude:'',gemini:'',openai:'',grok:''}, models:{claude:'claude-sonnet-5',gemini:'gemini-3.6-flash',openai:'gpt-4.1',grok:'grok-4'}, twelveDataKey:'', newsApiKey:'', tabOrder: REORDERABLE.slice() })
 };
 (function sanitizeSettings() {
   let order = (state.settings.tabOrder || []).filter(t => REORDERABLE.includes(t));
   REORDERABLE.forEach(t => { if (!order.includes(t)) order.push(t); });
   state.settings.tabOrder = order;
   if (!state.settings.apiKeys) state.settings.apiKeys = { claude: state.settings.apiKey || '', gemini:'', openai:'', grok:'' };
-  if (!state.settings.models) state.settings.models = { claude: state.settings.model || 'claude-sonnet-5', gemini:'gemini-2.5-flash', openai:'gpt-4.1', grok:'grok-4' };
+  if (!state.settings.models) state.settings.models = { claude: state.settings.model || 'claude-sonnet-5', gemini:'gemini-3.6-flash', openai:'gpt-4.1', grok:'grok-4' };
   if (!state.settings.provider) state.settings.provider = 'claude';
   if (state.settings.newsApiKey === undefined) state.settings.newsApiKey = state.settings.marketauxKey || '';
 })();
@@ -1003,7 +1003,12 @@ async function fetchNewsForKeyword(keyword) {
   if (!key) throw new Error('뉴스 API 키가 등록되어 있지 않습니다.');
   const fromDate = new Date(Date.now() - 3*86400000).toISOString();
   const url = `https://gnews.io/api/v4/search?q=${encodeURIComponent(keyword)}&sortby=publishedAt&from=${encodeURIComponent(fromDate)}&max=10&apikey=${encodeURIComponent(key)}`;
-  const res = await fetch(url);
+  let res;
+  try {
+    res = await fetch(url);
+  } catch (e) {
+    throw new Error('뉴스 서버에 연결하지 못했습니다 (네트워크 차단 가능성). GNews 무료 티어의 하루 요청 한도(100회)를 초과했거나, 기기의 광고/콘텐츠 차단 기능이 gnews.io 요청을 막고 있을 수 있어요. gnews.io 대시보드에서 오늘 사용량을 확인해 주세요.');
+  }
   if (!res.ok) throw new Error(`GNews API 오류 (${res.status}): ${(await res.text()).slice(0,200)}`);
   const data = await res.json();
   if (!Array.isArray(data.articles)) throw new Error('GNews 응답 형식이 예상과 다릅니다: ' + JSON.stringify(data).slice(0,200));
