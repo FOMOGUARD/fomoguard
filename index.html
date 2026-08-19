@@ -1,0 +1,2205 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>포모가드 | FomoGuard</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%9B%A1%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      colors: {
+        base: '#0b0e14',
+        card: '#141822',
+        cardhi: '#1b202c',
+        line: '#232838',
+        brand: '#3182f6',
+        brandDim: '#1c3a63',
+        up: '#f04452',
+        down: '#3182f6',
+        muted: '#8b93a7',
+        good: '#00c896',
+        warn: '#ffb800',
+        bad: '#f04452'
+      },
+      fontFamily: { sans: ['Pretendard', 'system-ui', 'sans-serif'] }
+    }
+  }
+}
+</script>
+<style>
+  html { -webkit-tap-highlight-color: transparent; }
+  body { font-family: 'Pretendard', system-ui, sans-serif; background: #05070c; }
+  ::-webkit-scrollbar { height: 6px; width: 6px; }
+  ::-webkit-scrollbar-thumb { background: #232838; border-radius: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .app-shell { max-width: 480px; margin: 0 auto; min-height: 100vh; background: #0b0e14; position: relative; }
+  @media (min-width: 481px) { .app-shell { box-shadow: 0 0 0 1px #181c26, 0 30px 80px -20px rgba(0,0,0,0.7); min-height: 100vh; } }
+  .card { background: #141822; border-radius: 20px; }
+  .row { background: #141822; border-radius: 16px; }
+  .fade-in { animation: fadeIn .22s ease both; }
+  @keyframes fadeIn { from { opacity:0; transform: translateY(6px);} to { opacity:1; transform:none; } }
+  .spin { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  input[type=text], input[type=number], input[type=date], input[type=password], textarea, select {
+    background:#0f1420; border:1px solid #232838; color:#eef1f7; border-radius:12px; padding:11px 13px; width:100%; outline:none; font-size:15px;
+  }
+  input:focus, textarea:focus, select:focus { border-color:#3182f6; }
+  textarea { resize: vertical; min-height: 90px; }
+  .btn-brand { background:#3182f6; color:#fff; font-weight:700; }
+  .btn-brand:active { filter: brightness(0.92); }
+  .btn-ghost { background:#1b202c; color:#eef1f7; }
+  .btn-ghost:active { background:#232a3a; }
+  .badge { font-size:11px; padding:3px 9px; border-radius:999px; font-weight:600; }
+  .modal-backdrop { background: rgba(2,4,8,0.75); backdrop-filter: blur(2px); }
+  .bottom-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; z-index: 30; }
+  .navbtn.active { color: #3182f6; }
+  .navbtn { color: #6b7280; }
+  .navbtn-center-wrap { position: relative; }
+  .navbtn-center { position: absolute; left: 50%; top: -20px; transform: translateX(-50%); width: 54px; height: 54px; border-radius: 9999px; background: #3182f6; display:flex; align-items:center; justify-content:center; font-size: 24px; box-shadow: 0 10px 22px -6px rgba(49,130,246,0.65); border: 4px solid #05070c; }
+  .seg { background:#0f1420; border-radius:12px; padding:3px; display:flex; gap:2px; }
+  .seg button { flex:1; padding:8px 0; border-radius:9px; font-size:13px; font-weight:600; color:#8b93a7; }
+  .seg button.active { background:#3182f6; color:#fff; }
+  .chip { background:#1b202c; color:#c6cbd9; font-size:12px; padding:5px 11px; border-radius:999px; font-weight:500; }
+  .chip.active { background:#3182f6; color:#fff; }
+</style>
+</head>
+<body class="text-[#eef1f7]">
+
+<div id="toast-wrap" class="fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 items-center w-full max-w-[440px] px-4"></div>
+
+<div id="welcome-overlay" class="fixed inset-0 z-[90] hidden bg-[#05070c] px-6 items-center justify-center">
+  <div class="w-full max-w-[380px] text-center">
+    <span class="text-6xl">🛡️</span>
+    <h1 class="font-extrabold text-2xl mt-4">포모가드</h1>
+    <p class="text-sm text-muted mt-1 mb-10">쉽고 편하게, 나만의 투자 집사</p>
+    <div id="welcome-google-wrap" class="mb-3 flex justify-center"></div>
+    <button id="welcome-skip" class="text-xs text-muted underline underline-offset-2 mt-3">나중에 할게요, 그냥 둘러볼래요 →</button>
+  </div>
+</div>
+
+<div class="app-shell">
+
+  <header class="px-5 pt-6 pb-3">
+    <div class="flex items-center gap-1">
+      <button id="btn-back" class="hidden w-8 h-8 -ml-1.5 mr-0.5 rounded-full items-center justify-center text-xl text-[#c6cbd9] flex-shrink-0">←</button>
+      <button id="btn-home" class="flex items-center gap-2 flex-1 text-left">
+        <span class="text-2xl">🛡️</span>
+        <div>
+          <h1 class="font-extrabold text-lg leading-none tracking-tight">포모가드</h1>
+          <p class="text-[11px] text-muted leading-none mt-1.5">쉽고 편하게, 나만의 투자 집사</p>
+        </div>
+      </button>
+    </div>
+  </header>
+
+  <main class="px-4 pb-32">
+    <section id="panel-dashboard" class="tab-panel fade-in"></section>
+    <section id="panel-factcheck" class="tab-panel hidden"></section>
+    <section id="panel-portfolio" class="tab-panel hidden"></section>
+    <section id="panel-journal" class="tab-panel hidden"></section>
+    <section id="panel-principles" class="tab-panel hidden"></section>
+    <section id="panel-settings" class="tab-panel hidden"></section>
+    <section id="panel-more" class="tab-panel hidden"></section>
+    <section id="panel-taborder" class="tab-panel hidden"></section>
+    <section id="panel-news" class="tab-panel hidden"></section>
+  </main>
+
+  <nav id="bottom-nav" class="bottom-nav bg-[#0b0e14]/95 backdrop-blur border-t border-line flex items-stretch px-1 pt-1.5 pb-[calc(env(safe-area-inset-bottom)+6px)]"></nav>
+
+</div>
+
+<div id="modal-root" class="fixed inset-0 z-50 hidden items-end justify-center modal-backdrop">
+  <div id="modal-box" class="card w-full max-w-[480px] max-h-[86vh] overflow-y-auto rounded-t-3xl rounded-b-none p-5 pb-8"></div>
+</div>
+
+<script>
+/* ---------------- storage ---------------- */
+const LS = {
+  principles: 'fomoguard_principles',
+  portfolio: 'fomoguard_portfolio',
+  journal: 'fomoguard_journal',
+  transactions: 'fomoguard_transactions',
+  factchecks: 'fomoguard_factchecks',
+  snapshots: 'fomoguard_snapshots',
+  settings: 'fomoguard_settings',
+  fx: 'fomoguard_fx',
+  market: 'fomoguard_market',
+  dailyAnalysis: 'fomoguard_daily_analysis',
+  newsKeywords: 'fomoguard_news_keywords',
+  newsCache: 'fomoguard_news_cache',
+  profile: 'fomoguard_profile'
+};
+function load(key, fallback) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch(e) { return fallback; } }
+function save(key, val) { localStorage.setItem(key, JSON.stringify(val)); if (typeof SYNCABLE_KEYS !== 'undefined' && SYNCABLE_KEYS.has(key)) scheduleCloudSync(); }
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(16).slice(2));
+
+const CENTER_TAB = 'factcheck';
+const REORDERABLE = ['dashboard','portfolio','journal','principles','settings','news'];
+
+/* ================= AI PROVIDERS (멀티 AI 연동 + 키 자동인식) ================= */
+const AI_PROVIDERS = {
+  claude: { label:'Claude', keyPlaceholder:'sk-ant-...', defaultModel:'claude-sonnet-5', modelSuggestions:['claude-sonnet-5','claude-opus-5','claude-haiku-4-5-20251001'] },
+  gemini: { label:'Gemini', keyPlaceholder:'AIza...', defaultModel:'gemini-2.5-flash', modelSuggestions:['gemini-2.5-pro','gemini-2.5-flash'] },
+  openai: { label:'ChatGPT', keyPlaceholder:'sk-...', defaultModel:'gpt-4.1', modelSuggestions:['gpt-5','gpt-4.1','gpt-4o-mini'] },
+  grok: { label:'Grok', keyPlaceholder:'xai-...', defaultModel:'grok-4', modelSuggestions:['grok-4','grok-3'] }
+};
+function detectProviderFromKey(key) {
+  if (/^sk-ant-/.test(key)) return 'claude';
+  if (/^AIza/.test(key)) return 'gemini';
+  if (/^xai-/.test(key)) return 'grok';
+  if (/^sk-/.test(key)) return 'openai';
+  return null;
+}
+function isLikelyChatModel(id, provider) {
+  if (provider !== 'openai' && provider !== 'grok') return true;
+  const bad = ['embedding','whisper','tts','dall-e','moderation','babbage','davinci-002','image','audio','realtime'];
+  const lower = id.toLowerCase();
+  return !bad.some(b => lower.includes(b));
+}
+async function fetchModelList(provider, key) {
+  try {
+    if (provider === 'claude') {
+      const res = await fetch('https://api.anthropic.com/v1/models', { headers: { 'x-api-key':key, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' } });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return (data.data||[]).map(m=>m.id);
+    }
+    if (provider === 'gemini') {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return (data.models||[]).filter(m => (m.supportedGenerationMethods||[]).includes('generateContent')).map(m => m.name.replace('models/',''));
+    }
+    const endpoint = provider === 'openai' ? 'https://api.openai.com/v1/models' : 'https://api.x.ai/v1/models';
+    const res = await fetch(endpoint, { headers: { 'Authorization':`Bearer ${key}` } });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return (data.data||[]).map(m=>m.id).filter(id => isLikelyChatModel(id, provider)).sort();
+  } catch(e) { return null; }
+}
+let modelListCache = { claude:[], gemini:[], openai:[], grok:[] };
+
+let state = {
+  principles: load(LS.principles, []),
+  portfolio: load(LS.portfolio, []),
+  journal: load(LS.journal, []),
+  transactions: load(LS.transactions, []),
+  factchecks: load(LS.factchecks, []),
+  snapshots: load(LS.snapshots, []),
+  fx: load(LS.fx, { rate: null, updatedAt: null }),
+  marketSnapshot: load(LS.market, null),
+  dailyAnalysis: load(LS.dailyAnalysis, null),
+  newsKeywords: load(LS.newsKeywords, []),
+  newsCache: load(LS.newsCache, {}),
+  profile: load(LS.profile, null),
+  settings: load(LS.settings, { provider:'claude', apiKeys:{claude:'',gemini:'',openai:'',grok:''}, models:{claude:'claude-sonnet-5',gemini:'gemini-2.5-flash',openai:'gpt-4.1',grok:'grok-4'}, twelveDataKey:'', newsApiKey:'', tabOrder: REORDERABLE.slice() })
+};
+(function sanitizeSettings() {
+  let order = (state.settings.tabOrder || []).filter(t => REORDERABLE.includes(t));
+  REORDERABLE.forEach(t => { if (!order.includes(t)) order.push(t); });
+  state.settings.tabOrder = order;
+  if (!state.settings.apiKeys) state.settings.apiKeys = { claude: state.settings.apiKey || '', gemini:'', openai:'', grok:'' };
+  if (!state.settings.models) state.settings.models = { claude: state.settings.model || 'claude-sonnet-5', gemini:'gemini-2.5-flash', openai:'gpt-4.1', grok:'grok-4' };
+  if (!state.settings.provider) state.settings.provider = 'claude';
+  if (state.settings.newsApiKey === undefined) state.settings.newsApiKey = state.settings.marketauxKey || '';
+})();
+function hasApiKey() { return !!(state.settings.apiKeys||{})[state.settings.provider]; }
+
+async function callAI({ system, user, maxTokens=1024 }) {
+  const provider = state.settings.provider || 'claude';
+  const apiKey = (state.settings.apiKeys||{})[provider];
+  const model = (state.settings.models||{})[provider] || AI_PROVIDERS[provider].defaultModel;
+  if (!apiKey) throw new Error('API 키가 등록되어 있지 않습니다.');
+
+  if (provider === 'claude') {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'content-type':'application/json', 'x-api-key':apiKey, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
+      body: JSON.stringify({ model, max_tokens:maxTokens, system, messages:[{ role:'user', content:user }] })
+    });
+    if (!res.ok) throw new Error(`Claude API 오류 (${res.status}): ${(await res.text()).slice(0,200)}`);
+    const data = await res.json();
+    return data.content?.[0]?.text || '';
+  }
+  if (provider === 'gemini') {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+      method: 'POST', headers: { 'content-type':'application/json' },
+      body: JSON.stringify({ system_instruction:{ parts:[{ text:system }] }, contents:[{ role:'user', parts:[{ text:user }] }], generationConfig:{ maxOutputTokens:maxTokens } })
+    });
+    if (!res.ok) throw new Error(`Gemini API 오류 (${res.status}): ${(await res.text()).slice(0,200)}`);
+    const data = await res.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  }
+  const endpoint = provider === 'openai' ? 'https://api.openai.com/v1/chat/completions' : 'https://api.x.ai/v1/chat/completions';
+  const res = await fetch(endpoint, {
+    method: 'POST', headers: { 'content-type':'application/json', 'Authorization':`Bearer ${apiKey}` },
+    body: JSON.stringify({ model, max_tokens:maxTokens, messages:[{ role:'system', content:system },{ role:'user', content:user }] })
+  });
+  if (!res.ok) throw new Error(`${AI_PROVIDERS[provider].label} API 오류 (${res.status}): ${(await res.text()).slice(0,200)}`);
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content || '';
+}
+
+/* ---------------- toast ---------------- */
+function toast(msg, type='info') {
+  const colors = { info:'#3182f6', success:'#00c896', error:'#f04452', warn:'#ffb800' };
+  const el = document.createElement('div');
+  el.className = 'card px-4 py-3 text-sm shadow-lg fade-in max-w-full w-full';
+  el.style.borderLeft = `4px solid ${colors[type]||colors.info}`;
+  el.textContent = msg;
+  document.getElementById('toast-wrap').appendChild(el);
+  setTimeout(() => { el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(),300); }, 3200);
+}
+
+/* ---------------- 클라우드 동기화 (Supabase Auth + DB) ---------------- */
+/* 아래 두 값을 본인의 Supabase 프로젝트 값으로 교체하세요. (설정 가이드 참고) */
+const SUPABASE_URL = 'https://ynxnouerpxxemntddqya.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_4raTyA00kKvm_rSveM336w_uncSPaNA';
+function isSupabaseConfigured() { return !SUPABASE_URL.includes('YOUR-PROJECT') && !SUPABASE_ANON_KEY.includes('YOUR-ANON'); }
+let supabaseClient = null;
+let currentUser = null;
+const SYNCABLE_KEYS = new Set([LS.principles, LS.portfolio, LS.journal, LS.transactions, LS.factchecks, LS.snapshots, LS.newsKeywords]);
+let cloudSyncTimer = null;
+function scheduleCloudSync() {
+  if (!supabaseClient || !currentUser) return;
+  clearTimeout(cloudSyncTimer);
+  cloudSyncTimer = setTimeout(pushToCloud, 1500);
+}
+async function pushToCloud() {
+  if (!supabaseClient || !currentUser) return;
+  const payload = { principles: state.principles, portfolio: state.portfolio, journal: state.journal, transactions: state.transactions, factchecks: state.factchecks, snapshots: state.snapshots, newsKeywords: state.newsKeywords };
+  const { error } = await supabaseClient.from('fomoguard_data').upsert({ user_id: currentUser.id, data: payload, updated_at: new Date().toISOString() });
+  if (!error) localStorage.setItem('fomoguard_last_cloud_sync', String(Date.now()));
+}
+async function pullFromCloud() {
+  if (!supabaseClient || !currentUser) return;
+  const { data } = await supabaseClient.from('fomoguard_data').select('data').eq('user_id', currentUser.id).maybeSingle();
+  if (data && data.data && Object.keys(data.data).length) {
+    const d = data.data;
+    if (d.principles) { state.principles = d.principles; save(LS.principles, state.principles); }
+    if (d.portfolio) { state.portfolio = d.portfolio; save(LS.portfolio, state.portfolio); }
+    if (d.journal) { state.journal = d.journal; save(LS.journal, state.journal); }
+    if (d.transactions) { state.transactions = d.transactions; save(LS.transactions, state.transactions); }
+    if (d.factchecks) { state.factchecks = d.factchecks; save(LS.factchecks, state.factchecks); }
+    if (d.snapshots) { state.snapshots = d.snapshots; save(LS.snapshots, state.snapshots); }
+    if (d.newsKeywords) { state.newsKeywords = d.newsKeywords; save(LS.newsKeywords, state.newsKeywords); }
+    localStorage.setItem('fomoguard_last_cloud_sync', String(Date.now()));
+    if (renderers[currentTab]) renderers[currentTab]();
+  } else {
+    await pushToCloud();
+  }
+}
+async function handleSupabaseSession(session, isNewSignIn) {
+  currentUser = session.user;
+  const meta = session.user.user_metadata || {};
+  state.profile = { provider:'google', name: meta.full_name || meta.name || '회원', email: session.user.email||'', picture: meta.avatar_url || meta.picture || '' };
+  save(LS.profile, state.profile);
+  renderHeaderProfile();
+  await pullFromCloud();
+  if (isNewSignIn) { hideWelcomeOverlay(); showWelcomeGreeting(state.profile.name); }
+  if (currentTab === 'settings') renderers.settings();
+}
+async function initSupabaseAuth() {
+  if (!isSupabaseConfigured()) return;
+  try {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (session) await handleSupabaseSession(session, false);
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session && (!currentUser || currentUser.id !== session.user.id)) {
+        handleSupabaseSession(session, true);
+      } else if (event === 'SIGNED_OUT') {
+        currentUser = null; state.profile = null; localStorage.removeItem(LS.profile);
+        renderHeaderProfile();
+        if (currentTab === 'settings') renderers.settings();
+      }
+    });
+  } catch(e) {}
+}
+async function loginWithGoogle() {
+  if (!isSupabaseConfigured()) { toast('클라우드 로그인이 아직 설정되지 않았어요. 설정 가이드를 참고해 SUPABASE_URL/ANON_KEY를 등록해주세요.', 'warn'); return; }
+  await supabaseClient.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: window.location.origin + window.location.pathname } });
+}
+function renderGoogleButton(targetId) {
+  const btnEl = document.getElementById(targetId);
+  if (!btnEl) return;
+  if (!isSupabaseConfigured()) { btnEl.innerHTML = '<p class="text-xs text-muted text-center">클라우드 로그인이 아직 설정되지 않았어요.</p>'; return; }
+  btnEl.innerHTML = `<button id="${targetId}-btn" class="w-full max-w-[280px] flex items-center justify-center gap-2.5 bg-white text-[#3c4043] font-semibold text-sm py-3 rounded-full shadow-lg">
+    <span style="font-weight:800;color:#4285F4;">G</span>oogle로 계속하기
+  </button>`;
+  document.getElementById(targetId+'-btn').onclick = loginWithGoogle;
+}
+const GREETINGS = [
+  n => `${n}님, 오늘도 냉철하게 가보시죠 🧊`,
+  n => `어서오세요 ${n}님! 오늘의 존버 각오는 되셨나요?`,
+  n => `${n}님 등장! 포모가드가 오늘도 지켜드릴게요 🛡️`,
+  n => `${n}님, '가즈아'는 감탄사일 뿐이에요... 원칙 먼저!`,
+  n => `${n}님 반가워요! 오늘 하루도 이성 챙기고 가요`
+];
+function showWelcomeGreeting(name) {
+  const msg = GREETINGS[Math.floor(Math.random()*GREETINGS.length)](name);
+  toast(msg, 'success');
+}
+function renderHeaderProfile() {
+  const wrap = document.getElementById('btn-home');
+  if (state.profile) {
+    wrap.innerHTML = `${state.profile.picture ? `<img src="${state.profile.picture}" class="w-8 h-8 rounded-full flex-shrink-0">` : `<span class="text-2xl">🛡️</span>`}<div><h1 class="font-extrabold text-lg leading-none tracking-tight">포모가드</h1><p class="text-[11px] text-brand leading-none mt-1.5 font-semibold">${escapeHtml(state.profile.name)}님, 오늘도 원칙대로 🧊</p></div>`;
+  } else {
+    wrap.innerHTML = `<span class="text-2xl">🛡️</span><div><h1 class="font-extrabold text-lg leading-none tracking-tight">포모가드</h1><p class="text-[11px] text-muted leading-none mt-1.5">쉽고 편하게, 나만의 투자 집사</p></div>`;
+  }
+}
+function hideWelcomeOverlay() {
+  const ov = document.getElementById('welcome-overlay');
+  ov.classList.add('hidden'); ov.classList.remove('flex');
+  localStorage.setItem('fomoguard_onboarded', '1');
+}
+function showWelcomeOverlay() {
+  const ov = document.getElementById('welcome-overlay');
+  ov.classList.remove('hidden'); ov.classList.add('flex');
+  renderGoogleButton('welcome-google-wrap');
+}
+function logout() {
+  if (supabaseClient) { try { supabaseClient.auth.signOut(); } catch(e){} }
+  currentUser = null;
+  state.profile = null;
+  localStorage.removeItem(LS.profile);
+  renderHeaderProfile();
+  if (currentTab === 'settings') renderers.settings();
+  toast('로그아웃했습니다.');
+}
+document.getElementById('welcome-skip').addEventListener('click', hideWelcomeOverlay);
+
+/* ---------------- nav / tabs / back history ---------------- */
+const TAB_META = {
+  dashboard: { label:'대시보드', icon:'📊' },
+  factcheck: { label:'포모체크', icon:'🧊' },
+  portfolio: { label:'포트폴리오', icon:'💼' },
+  journal: { label:'투자일지', icon:'📓' },
+  principles: { label:'투자원칙', icon:'📜' },
+  settings: { label:'설정', icon:'⚙️' },
+  news: { label:'실시간 뉴스', icon:'📰' }
+};
+const renderers = {};
+let currentTab = 'dashboard';
+let navHistory = [];
+
+function visibleFlank() { return state.settings.tabOrder.slice(0,3); }
+function overflowTabs() { return state.settings.tabOrder.slice(3); }
+
+function renderBottomNav() {
+  const nav = document.getElementById('bottom-nav');
+  const flank = visibleFlank();
+  const isMainVisible = flank.includes(currentTab) || currentTab === CENTER_TAB;
+  function normalBtn(t) {
+    return `<button data-tab="${t}" class="navbtn flex-1 flex flex-col items-center gap-0.5 py-1.5 ${currentTab===t?'active':''}">
+      <span class="text-xl leading-none">${TAB_META[t].icon}</span>
+      <span class="text-[10px] font-semibold">${TAB_META[t].label}</span>
+    </button>`;
+  }
+  const centerActive = currentTab === CENTER_TAB;
+  const centerBtn = `
+    <div class="navbtn-center-wrap flex-1 flex flex-col items-center justify-end pb-0.5">
+      <button data-tab="${CENTER_TAB}" class="navbtn-center ${centerActive?'ring-2 ring-white/50':''}">${TAB_META[CENTER_TAB].icon}</button>
+      <span class="text-[10px] font-bold mt-7 ${centerActive?'text-brand':'text-[#c6cbd9]'}">${TAB_META[CENTER_TAB].label}</span>
+    </div>
+  `;
+  nav.innerHTML = normalBtn(flank[0]) + normalBtn(flank[1]) + centerBtn + normalBtn(flank[2]) + `
+    <button data-tab="more" class="navbtn flex-1 flex flex-col items-center gap-0.5 py-1.5 ${!isMainVisible?'active':''}">
+      <span class="text-xl leading-none">☰</span>
+      <span class="text-[10px] font-semibold">더보기</span>
+    </button>
+  `;
+  nav.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+}
+
+function renderHeaderState() {
+  document.getElementById('btn-back').classList.toggle('hidden', navHistory.length === 0);
+  document.getElementById('btn-back').classList.toggle('flex', navHistory.length > 0);
+}
+
+function switchTab(name, isBack) {
+  if (!isBack && currentTab && currentTab !== name) navHistory.push(currentTab);
+  currentTab = name;
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+  const panel = document.getElementById('panel-' + name);
+  panel.classList.remove('hidden');
+  panel.classList.add('fade-in');
+  window.scrollTo(0,0);
+  if (renderers[name]) renderers[name]();
+  renderBottomNav();
+  renderHeaderState();
+}
+function goBack() {
+  if (navHistory.length === 0) return;
+  const prev = navHistory.pop();
+  switchTab(prev, true);
+}
+function goHome() {
+  switchTab('dashboard');
+  navHistory = [];
+  renderHeaderState();
+}
+document.getElementById('btn-back').addEventListener('click', goBack);
+document.getElementById('btn-home').addEventListener('click', goHome);
+
+/* ---------------- modal ---------------- */
+function openModal(title, bodyHtml, footerHtml='') {
+  document.getElementById('modal-box').innerHTML = `
+    <div class="w-9 h-1 bg-line rounded-full mx-auto mb-4"></div>
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-bold text-lg">${title}</h3>
+      <button id="modal-close" class="text-muted text-xl leading-none w-8 h-8 flex items-center justify-center">✕</button>
+    </div>
+    <div id="modal-body">${bodyHtml}</div>
+    <div id="modal-footer" class="mt-5 flex gap-2 justify-end">${footerHtml}</div>
+  `;
+  document.getElementById('modal-root').classList.remove('hidden');
+  document.getElementById('modal-root').classList.add('flex');
+  document.getElementById('modal-close').onclick = closeModal;
+}
+function closeModal() {
+  document.getElementById('modal-root').classList.add('hidden');
+  document.getElementById('modal-root').classList.remove('flex');
+}
+document.getElementById('modal-root').addEventListener('click', e => { if (e.target.id === 'modal-root') closeModal(); });
+function confirmModal(title, desc, onConfirm, confirmLabel='삭제') {
+  openModal(title, `<p class="text-sm text-muted">${desc}</p>`, `
+    <button class="btn-ghost px-4 py-2.5 rounded-xl text-sm" onclick="closeModal()">취소</button>
+    <button id="confirm-action-btn" class="px-4 py-2.5 rounded-xl text-sm bg-bad text-white font-bold">${confirmLabel}</button>
+  `);
+  document.getElementById('confirm-action-btn').onclick = () => { closeModal(); onConfirm(); };
+}
+
+/* ---------------- helpers ---------------- */
+const fmtWon = n => (Math.round(n)||0).toLocaleString('ko-KR') + '원';
+const fmtPct = n => (n>0?'+':'') + n.toFixed(1) + '%';
+const fmtPrice = (n, currency) => currency==='USD' ? '$'+(+n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : fmtWon(n);
+const todayStr = () => new Date().toISOString().slice(0,10);
+function escapeHtml(s) { return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function timeAgo(ts) {
+  if (!ts) return '정보 없음';
+  const diff = Date.now() - ts;
+  const min = Math.floor(diff/60000);
+  if (min < 1) return '방금 전';
+  if (min < 60) return `${min}분 전`;
+  const hr = Math.floor(min/60);
+  if (hr < 24) return `${hr}시간 전`;
+  return `${Math.floor(hr/24)}일 전`;
+}
+function daysAgoLabel(dateStr) {
+  const t = Date.parse(dateStr);
+  if (isNaN(t)) return '';
+  const days = Math.floor((Date.now()-t)/86400000);
+  if (days <= 0) return '오늘';
+  if (days === 1) return '어제';
+  if (days < 7) return `${days}일 전`;
+  return new Date(t).toISOString().slice(0,10);
+}
+function weekdayKR(dateStr) { const d = new Date(dateStr+'T00:00:00'); return ['일','월','화','수','목','금','토'][d.getDay()]; }
+function retColor(ret) {
+  if (ret > 15) return '#c81e2c';
+  if (ret > 5) return '#e34350';
+  if (ret > 0) return '#f2828c';
+  if (ret === 0) return '#3a4152';
+  if (ret > -5) return '#7fb0fb';
+  if (ret > -15) return '#4f8bf5';
+  return '#2563d9';
+}
+function quoteOfTheDay() {
+  const pool = [...MARKET_QUOTES, ...MEME_QUOTES];
+  const day = Math.floor(Date.now()/86400000);
+  return pool[day % pool.length];
+}
+
+/* ================= INVESTOR TEMPLATES (검증 및 초보자용으로 재정리) ================= */
+const INVESTOR_CATEGORIES = [
+  {
+    category: '가치투자 · 싸게 사서 안전하게',
+    desc: '회사의 진짜 가치보다 쌀 때만 사고, 손해를 줄일 여유분을 항상 남겨둔다는 흐름의 투자자들',
+    investors: [
+      { name:'워런 버핏', role:'버크셔 해서웨이 회장', points:[
+        '내가 완전히 이해할 수 있는 사업에만 투자한다 — 모르는 분야는 건드리지 않는다',
+        '회사의 진짜 가치보다 쌀 때만 산다 — 마트에서 세일할 때 사는 것과 같은 원리다',
+        '예상이 틀려도 손해를 줄일 수 있게, 충분히 싼 가격이라는 "여유분(안전마진)" 없이는 사지 않는다',
+        '믿을 수 있는 경영진이 있고, 경쟁자가 쉽게 따라올 수 없는 강점이 있는 회사를 고른다',
+        '주가가 흔들려도 좋은 회사라면 팔지 않고 오래 들고 간다',
+        '빚을 내서 투자하지 않는다 — 내 돈으로만 투자한다'
+      ]},
+      { name:'벤저민 그레이엄', role:'컬럼비아대 교수, 버핏의 스승', points:[
+        '회사의 진짜 가치보다 충분히 싼 가격일 때만 산다 — 이 여유분을 "안전마진"이라 부른다',
+        '시장은 단기적으로 감정에 휘둘려 오르내린다는 것을 항상 기억한다 — 가격이 오른다고 따라 사지 않는다',
+        '사기 전에 반드시 회사의 재무 상태(빚이 얼마나 많은지)를 확인한다',
+        '"투자"와 "도박성 베팅"을 구분한다 — 근거 없는 기대만으로 사지 않는다'
+      ]},
+      { name:'세스 클라만', role:'바우포스트 그룹 대표', points:[
+        '얼마를 벌 수 있는지보다, 최악의 경우 얼마를 잃을 수 있는지 먼저 생각한다',
+        '시장 전체가 겁에 질려 다들 팔 때, 오히려 그 안에 좋은 기회가 있는지 살펴본다',
+        '막연한 예측이 아니라 지금 확인 가능한 사실에 근거해서 결정한다',
+        '마땅히 살 게 없다면 현금을 들고 기다리는 것도 훌륭한 선택이다'
+      ]},
+      { name:'존 템플턴', role:'템플턴 펀드 창립자', points:[
+        '모두가 가장 비관적일 때가 오히려 가장 좋은 매수 시점인 경우가 많다',
+        '한 나라, 한 시장에 갇히지 않고 전 세계에서 저평가된 곳을 찾는다',
+        '"이번엔 다르다"는 말을 가장 위험한 말로 여긴다 — 시장은 결국 비슷한 패턴을 반복한다',
+        '모두가 비관적일 때 사서, 모두가 낙관적일 때 판다는 원칙을 지킨다'
+      ]}
+    ]
+  },
+  {
+    category: '성장주 투자 · 좋은 기업을 일찍 알아보기',
+    desc: '앞으로 크게 성장할 기업을 남들보다 먼저 발견하고 확인하는 데 집중하는 투자자들',
+    investors: [
+      { name:'피터 린치', role:'마젤란 펀드 전 운용자', points:[
+        '내 생활 속에서 발견한, 내가 실제로 써보고 이해한 회사에 투자한다',
+        '이 회사가 왜 좋은지 초등학생도 알아들을 한 문장으로 설명하지 못하면 사지 않는다',
+        '회사가 얼마나 빨리 크는지(성장률)에 비해 주가가 너무 비싸지 않은지 확인한다',
+        '분기 실적 하나하나에 일희일비하지 않고, 회사의 성장 스토리를 길게 본다'
+      ]},
+      { name:'필립 피셔', role:'"위대한 기업에 투자하라" 저자', points:[
+        '숫자만 보지 않고, 경쟁사·거래처·직원 이야기까지 발로 뛰며 회사를 검증한다',
+        '미래를 위해 연구개발에 꾸준히 투자하는 회사를 좋아한다',
+        '정말 좋은 회사를 찾았다면 자주 사고팔지 않고 오래 보유한다',
+        '경영진이 정직한지, 주주를 어떻게 대하는지까지 살펴본다'
+      ]}
+    ]
+  },
+  {
+    category: '분산과 리스크 관리 · 계란을 한 바구니에 담지 않기',
+    desc: '한 종목에 집중하기보다, 잃을 위험을 먼저 줄이는 것을 우선하는 투자자들',
+    investors: [
+      { name:'레이 달리오', role:'브리지워터 어소시에이츠 창립자', points:[
+        '서로 다르게 움직이는 여러 자산에 나누어 투자해 위험을 줄인다',
+        '투자하기 전에 "이 투자가 완전히 잘못되면 얼마나 잃는지"를 먼저 계산해둔다',
+        '지금 내 감정(불안, 흥분)과 실제 데이터가 말해주는 것을 구분해서 생각한다',
+        '금리, 경기 흐름 같은 큰 그림을 이해하고 자산 배분을 조정한다'
+      ]},
+      { name:'존 보글', role:'뱅가드그룹 창립자', points:[
+        '시장을 이기려 애쓰기보다, 시장 전체를 싸게 담아 꾸준히 오래 들고 간다',
+        '잦은 매매에 붙는 수수료와 세금이 수익을 갉아먹는다는 것을 항상 기억한다',
+        '오늘 시장이 오를지 내릴지는 아무도 확신할 수 없다 — 맞히려 하지 않는다',
+        '핵심 자산은 특정 종목보다 폭넓게 분산된 자산으로 채운다'
+      ]}
+    ]
+  },
+  {
+    category: '투자 심리와 인내 · 감정을 다스리는 법',
+    desc: '기술적 분석보다, 스스로의 심리와 태도를 관리하는 것이 더 중요하다고 강조한 투자자들',
+    investors: [
+      { name:'찰리 멍거', role:'버크셔 해서웨이 부회장', points:[
+        '확신이 서는 좋은 기회가 아니면 아무것도 하지 않는다 — 기다리는 것도 전략이다',
+        '복잡하고 화려한 이야기보다 단순하고 명백하게 좋은 결정을 선호한다',
+        '지금 내가 남들을 따라 하고 있는 건 아닌지, 보고 싶은 것만 보는 건 아닌지 스스로 점검한다',
+        '크게 한 번 잃지 않는 것이 여러 번 조금씩 버는 것보다 중요하다'
+      ]},
+      { name:'하워드 막스', role:'오크트리캐피털 회장', points:[
+        '시장은 오르내림(사이클)을 반복한다는 것을 이해하고, 지금이 그중 어디쯤인지 가늠해본다',
+        '남들이 다 좋다고 할 때 오히려 조심하고, 남들이 다 겁먹을 때 기회를 살펴본다',
+        '"얼마나 벌 수 있는가"보다 "얼마나 위험한가"를 먼저 따진다',
+        '남들의 얕은 확신보다, 내가 깊이 이해하고 내린 판단을 믿는다'
+      ]},
+      { name:'앙드레 코스톨라니', role:'유럽의 전설적 투자자', points:[
+        '좋은 주식을 사서 신경 쓰지 않고 오래 둘 수 있을 만큼 마음의 여유를 갖는다',
+        '단기적인 가격은 회사의 실제 가치보다 사람들의 심리에 더 크게 좌우된다는 것을 이해한다',
+        '시장에는 돈은 있지만 생각이 없는 사람과, 생각은 있지만 돈이 없는 사람이 있다는 말을 기억한다',
+        '인내심 없이는 이 시장에서 오래 살아남을 수 없다'
+      ]}
+    ]
+  }
+];
+
+/* ================= 투자 명언 · 밈 모음 (100개 이상, 데일리 로테이션용) ================= */
+const MARKET_QUOTES = [
+  { text: '남들이 두려워할 때 욕심을 내고, 남들이 욕심낼 때 두려워하라는 태도를 강조했다', who:'워런 버핏의 투자 철학에서' },
+  { text: '가격은 당신이 지불하는 것이고, 가치는 당신이 얻는 것이라는 인식을 강조했다', who:'워런 버핏의 투자 철학에서' },
+  { text: '10년을 보유할 자신이 없다면 단 10분도 보유하지 말라고 조언했다', who:'워런 버핏의 투자 철학에서' },
+  { text: '규칙 1은 돈을 잃지 않는 것, 규칙 2는 규칙 1을 잊지 않는 것이라 말했다', who:'워런 버핏의 투자 철학에서' },
+  { text: '다른 사람의 탐욕에 편승하기보다 자신만의 원칙을 지키라고 강조했다', who:'워런 버핏의 투자 철학에서' },
+  { text: '시장은 단기적으로 투표 기계지만 장기적으로는 저울이라는 비유를 남겼다', who:'벤저민 그레이엄의 투자 철학에서' },
+  { text: '가장 위험한 투자는 스스로를 전문가라 착각하는 아마추어의 투자라고 경고했다', who:'벤저민 그레이엄의 투자 철학에서' },
+  { text: '투자자의 가장 큰 적은 시장이 아니라 자기 자신이라는 것을 강조했다', who:'벤저민 그레이엄의 투자 철학에서' },
+  { text: '당신이 이해하지 못하는 것에는 투자하지 말라고 조언했다', who:'피터 린치의 투자 철학에서' },
+  { text: '주식을 조사하지 않고 사는 것은 카드를 보지 않고 포커를 하는 것과 같다고 비유했다', who:'피터 린치의 투자 철학에서' },
+  { text: '장기적으로 보면 좋은 회사를 고르는 것이 시장 타이밍보다 중요하다고 말했다', who:'피터 린치의 투자 철학에서' },
+  { text: '강세장은 비관 속에서 태어나 회의 속에서 자라고 낙관 속에서 죽는다고 말했다', who:'존 템플턴의 투자 철학에서' },
+  { text: '다른 사람들과 같은 방식으로 매수하면 같은 결과밖에 얻을 수 없다고 강조했다', who:'존 템플턴의 투자 철학에서' },
+  { text: '내가 어디서 실패할지 먼저 알고, 그곳을 피하는 역발상 사고법을 남겼다', who:'찰리 멍거의 투자 철학에서' },
+  { text: '부자가 되는 데는 특별한 재주가 필요 없다, 그저 오랫동안 어리석지 않으면 된다고 말했다', who:'찰리 멍거의 투자 철학에서' },
+  { text: '인내심이야말로 투자에서 가장 저평가된 능력이라고 강조했다', who:'찰리 멍거의 투자 철학에서' },
+  { text: '고통에 성찰을 더하면 성장이 된다는 공식으로 실패에서 배우는 태도를 강조했다', who:'레이 달리오의 투자 철학에서' },
+  { text: '당신이 모르는 것을 아는 것이, 이미 아는 것을 아는 것보다 중요하다고 말했다', who:'레이 달리오의 투자 철학에서' },
+  { text: '가만히 있는 것이 때로는 가장 어려우면서도 가장 현명한 투자 행동이라고 말했다', who:'존 보글의 투자 철학에서' },
+  { text: '비용이 낮을수록 투자자의 몫이 커진다는 단순한 산수를 강조했다', who:'존 보글의 투자 철학에서' },
+  { text: '시간은 당신의 친구고, 충동은 당신의 적이라고 표현했다', who:'존 보글의 투자 철학에서' },
+  { text: '주식을 사는 것은 결혼과 같아서, 충동적으로 결정할 일이 아니라고 비유했다', who:'필립 피셔의 투자 철학에서' },
+  { text: '좋은 경영진을 알아보는 눈이 좋은 재무제표를 읽는 눈만큼 중요하다고 강조했다', who:'필립 피셔의 투자 철학에서' },
+  { text: '가장 위험한 것은 위험이 없다고 믿는 것이라고 경고했다', who:'하워드 막스의 투자 철학에서' },
+  { text: '2류 지성으로 얻는 확신보다, 스스로 깊이 이해한 소수의 판단이 낫다고 말했다', who:'하워드 막스의 투자 철학에서' },
+  { text: '미래를 예측하려 하기보다 지금의 상황을 정확히 파악하는 것이 먼저라고 강조했다', who:'하워드 막스의 투자 철학에서' },
+  { text: '안전마진 없이 하는 투자는 투자가 아니라 투기라고 선을 그었다', who:'세스 클라만의 투자 철학에서' },
+  { text: '시장의 소음과 실제 가치를 구분하는 능력이 투자자의 핵심 자질이라고 말했다', who:'세스 클라만의 투자 철학에서' },
+  { text: '달걀 두 개를 가진 자는 하나는 먹고 하나는 심으라는 우화로 분산을 설명했다', who:'앙드레 코스톨라니의 투자 철학에서' },
+  { text: '투자에서 가장 어려운 것은 아무것도 하지 않고 버티는 것이라고 말했다', who:'앙드레 코스톨라니의 투자 철학에서' },
+  { text: '위기 속에서 기회를 찾으려면, 다들 팔 때 오히려 더 깊이 공부해야 한다는 조언을 남겼다', who:'짐 로저스의 투자 철학에서' },
+  { text: '군중과 반대로 움직일 용기가 없다면 큰 수익도 기대하기 어렵다고 말했다', who:'짐 로저스의 투자 철학에서' },
+  { text: '세상이 바뀌는 방향을 먼저 읽는 사람이 다음 기회를 잡는다고 강조했다', who:'짐 로저스의 투자 철학에서' },
+  { text: '내가 틀렸다는 것을 빨리 인정하는 사람이 결국 시장에서 오래 살아남는다는 생각을 남겼다', who:'조지 소로스의 투자 철학에서' },
+  { text: '중요한 것은 당신이 옳은지가 아니라, 옳을 때 얼마나 벌고 틀릴 때 얼마나 잃는지라고 말했다', who:'조지 소로스의 투자 철학에서' },
+  { text: '시장은 항상 편향되어 있으며 그 편향을 이해하는 것이 기회라고 보았다', who:'조지 소로스의 투자 철학에서' },
+  { text: '예측할 수 없는 큰 충격에 무너지지 않도록, 항상 여유 자금을 남겨두라는 위험관리 원칙을 남겼다', who:'나심 니콜라스 탈레브의 저작에서' },
+  { text: '칠면조는 도살되기 전날까지 매일 안전하다고 느낀다는 비유로 방심을 경고했다', who:'나심 니콜라스 탈레브의 저작에서' },
+  { text: '무너지지 않는 것이 크게 성공하는 것보다 먼저라고 강조했다', who:'나심 니콜라스 탈레브의 저작에서' },
+  { text: '지식에 투자하는 것이 가장 높은 이자를 준다는 말을 남겼다', who:'벤저민 프랭클린의 어록에서' },
+  { text: '곤경에 빠지는 것은 무언가를 몰라서가 아니라, 확실히 안다고 착각해서라는 유명한 경고를 남겼다', who:'마크 트웨인의 어록에서' },
+  { text: '시장은 당신이 버틸 수 있는 시간보다 더 오래 비이성적일 수 있다고 경고했다', who:'존 메이너드 케인스의 어록에서' },
+  { text: '무릎에서 사서 어깨에서 팔아라 — 바닥과 꼭대기를 노리지 말고 적당한 구간에서 매매하라는 뜻', who:'오래된 증권가 격언' },
+  { text: '달걀을 한 바구니에 담지 마라 — 분산 투자의 중요성을 강조하는 가장 오래된 투자 격언', who:'전통 투자 격언' },
+  { text: '소문에 사고 뉴스에 팔아라 — 정보가 모두에게 퍼진 뒤에는 이미 가격에 반영되어 있다는 뜻', who:'월가 트레이딩 격언' },
+  { text: '잃지 않는 것이 첫 번째 원칙이라는 오래된 증권가 격언', who:'오래된 증권가 격언' },
+  { text: '숲을 보고 나무를 보라는 오래된 투자 격언', who:'전통 투자 격언' },
+  { text: '손절은 짧게, 이익은 길게 가져가라는 트레이딩 격언', who:'월가 트레이딩 격언' },
+  { text: '시장에 맞서지 말고 흐름을 따르라는 월가 격언', who:'월가 트레이딩 격언' },
+  { text: '떨어지는 칼날은 잡지 말라는 오래된 트레이딩 격언', who:'오래된 증권가 격언' },
+  { text: '황소도 곰도 돈을 벌지만 욕심을 부리는 돼지는 결국 손해를 본다는 월가 격언', who:'월가 트레이딩 격언' },
+  { text: '시장에서 가장 비싼 네 단어는 "이번엔 다르다"라는 격언', who:'전통 투자 격언' },
+  { text: '무엇을 아는지뿐 아니라 왜 아는지까지 아는 것이 진짜 투자라는 오래된 격언', who:'전통 투자 격언' },
+  { text: '분산은 무지에 대한 유일한 보험이라는 투자 격언', who:'전통 투자 격언' },
+  { text: '시간이 시장 타이밍을 이긴다는 오래된 투자 격언', who:'전통 투자 격언' },
+  { text: '싸게 사서 비싸게 팔라는 말은 쉽지만 지키기는 가장 어려운 격언이라는 뜻', who:'월가 트레이딩 격언' },
+  { text: '돈을 버는 것보다 지키는 것이 어렵다는 오래된 투자 격언', who:'전통 투자 격언' },
+  { text: '확신이 없다면 아무것도 하지 않는 것도 하나의 전략이라는 투자 격언', who:'전통 투자 격언' }
+];
+const MEME_QUOTES = [
+  { text: '존버는 승리한다 — 다만 원칙 없는 존버는 승리가 아니라 그냥 버티기다', who:'온라인 투자 커뮤니티 밈' },
+  { text: '"가즈아!"는 감탄사일 뿐, 투자 전략이 아니다', who:'투자 커뮤니티 유행어' },
+  { text: '"무릎에 사서 어깨에 팔아라"의 현실 버전: 가슴에 사서 발목에 판다', who:'투자 커뮤니티 자조 개그' },
+  { text: '몰빵은 인생 역전 아니면 인생 정지, 둘 중 하나다', who:'투자 커뮤니티 유행어' },
+  { text: '파이어(FIRE)는 꿈꾸지만, 파이어(불탐) 당하고 싶진 않다', who:'MZ 투자 유행어' },
+  { text: '빚투의 결말은 대부분 존버가 아니라 존버틸 돈이 없는 상태', who:'투자 커뮤니티 유행어' },
+  { text: '오늘 안 사면 내일 오르고, 오늘 사면 내일 떨어진다는 국룰', who:'투자 커뮤니티 머피의 법칙' },
+  { text: '존버도 전략이 있어야 존버지, 그냥 물린 건 존버가 아니라 방치다', who:'투자 커뮤니티 자조 개그' },
+  { text: '물타기도 실력이다, 다만 그 실력이 파산으로 가는 지름길일 수도 있다', who:'투자 커뮤니티 유행어' },
+  { text: '불타기는 확신의 증거일까, 그냥 도박일까? 원칙이 답해준다', who:'투자 커뮤니티 자조 개그' },
+  { text: '익절은 기술, 손절은 예술, 존버는 그냥 방치일 때가 많다', who:'투자 커뮤니티 유행어' },
+  { text: '영끌해서 산 종목은 밤에 잠이 안 온다는 국룰', who:'투자 커뮤니티 유행어' },
+  { text: '동학개미도 서학개미도 결국 원칙 없인 그냥 개미', who:'투자 커뮤니티 유행어' },
+  { text: '계좌 인증은 화면 캡처 한 장, 원칙은 평생 습관', who:'투자 커뮤니티 자조 개그' },
+  { text: '"이건 진짜 마지막 기회"라는 말, 벌써 몇 번째인가', who:'투자 커뮤니티 자조 개그' },
+  { text: '상따는 용기가 아니라 그냥 늦게 탄 버스', who:'투자 커뮤니티 유행어' },
+  { text: '테마주는 타이밍의 예술이자 대부분 뒷북의 미학', who:'투자 커뮤니티 자조 개그' },
+  { text: '"묻고 더블로 가"는 카지노 명언이지 투자 원칙이 아니다', who:'투자 커뮤니티 유행어' },
+  { text: '흑우는 계좌를 스스로 인증하지 않는다, 조용히 손절할 뿐', who:'투자 커뮤니티 자조 개그' },
+  { text: '고점에 물린 사람의 공통점: "조금만 더 사면 평단 낮아지는데"', who:'투자 커뮤니티 자조 개그' },
+  { text: '롤러코스터는 놀이공원에서 타는 걸로 충분하다', who:'투자 커뮤니티 유행어' },
+  { text: '"가즈아"와 "망했다" 사이의 거리는 생각보다 가깝다', who:'투자 커뮤니티 자조 개그' },
+  { text: '존버는 신념이 아니라 자금 관리에서 나온다', who:'투자 커뮤니티 유행어' },
+  { text: '"다음 상한가는 내 차례"라는 근거 없는 믿음', who:'투자 커뮤니티 자조 개그' },
+  { text: '무지성 매수 뒤에는 대체로 무지성 손절이 따라온다', who:'투자 커뮤니티 유행어' },
+  { text: '세력은 언제나 개미보다 먼저 나간다는 것을 기억하자', who:'투자 커뮤니티 유행어' },
+  { text: '"조금만 더 오르면 판다"는 말은 대부분 지켜지지 않는다', who:'투자 커뮤니티 자조 개그' },
+  { text: '손절은 실패가 아니라 다음 기회를 위한 선택이다', who:'투자 커뮤니티 유행어' },
+  { text: '급등에 올라타기 전, 왜 급등했는지부터 확인하자', who:'투자 커뮤니티 유행어' },
+  { text: '"내 종목만 안 오른다"는 착각은 모든 투자자가 한 번씩 한다', who:'투자 커뮤니티 자조 개그' },
+  { text: '빚투는 수익도 두 배, 리스크도 두 배라는 걸 잊지 말자', who:'투자 커뮤니티 유행어' },
+  { text: '청약은 로또가 아니라 계산이 필요한 투자다', who:'투자 커뮤니티 유행어' },
+  { text: '"존버는 배신하지 않는다"는 말, 원칙 없인 배신할 수도 있다', who:'투자 커뮤니티 자조 개그' },
+  { text: 'SNS 종목 추천은 참고만, 결정은 내 몫이다', who:'투자 커뮤니티 유행어' },
+  { text: '"이 종목 어때요?"라는 질문보다 "왜 사려는지"가 더 중요하다', who:'투자 커뮤니티 유행어' },
+  { text: '떡상을 노리다 떡락을 만나는 건 한 끗 차이다', who:'투자 커뮤니티 유행어' },
+  { text: '지금 안 사면 늦는다는 조바심이 가장 비싼 수수료다', who:'투자 커뮤니티 유행어' },
+  { text: '평단 낮추려다 계좌만 낮아지는 경우가 많다', who:'투자 커뮤니티 자조 개그' },
+  { text: '"몇 프로 먹고 나온다"는 계획, 실행은 늘 감정이 방해한다', who:'투자 커뮤니티 자조 개그' },
+  { text: '커뮤니티 인증글은 성공만 올라온다는 것을 기억하자', who:'투자 커뮤니티 유행어' },
+  { text: '"존버 성공기"보다 "존버 실패기"가 훨씬 많다, 다만 안 올릴 뿐', who:'투자 커뮤니티 자조 개그' },
+  { text: '매수 버튼 누르기 전에 원칙을 먼저 눌러보자', who:'투자 커뮤니티 유행어' },
+  { text: '급락장에서 손이 먼저 나가면 대체로 손해가 따라온다', who:'투자 커뮤니티 유행어' },
+  { text: '"저점 매수"는 지나고 나서야 저점인 걸 안다', who:'투자 커뮤니티 자조 개그' },
+  { text: '존버할 자신이 없으면 애초에 몰빵하지 않는 게 답이다', who:'투자 커뮤니티 유행어' },
+  { text: '"이 정도 손실은 괜찮아"라는 말이 반복되면 위험 신호다', who:'투자 커뮤니티 유행어' },
+  { text: '투자는 속도가 아니라 방향이 중요하다', who:'투자 커뮤니티 유행어' },
+  { text: '남들이 다 산다고 나도 사야 하는 건 아니다', who:'투자 커뮤니티 유행어' },
+  { text: '"있어빌리티"는 SNS에서나 통하지 계좌에선 안 통한다', who:'투자 커뮤니티 자조 개그' },
+  { text: '돈 잃고 배우는 것보다 미리 원칙 세우고 배우는 게 싸게 먹힌다', who:'투자 커뮤니티 유행어' },
+  { text: '"한 번만 크게 먹자"는 생각이 크게 잃는 지름길이 되기도 한다', who:'투자 커뮤니티 자조 개그' },
+  { text: '존버든 손절이든, 결정의 이유를 스스로 설명할 수 있어야 한다', who:'투자 커뮤니티 유행어' },
+  { text: '리딩방 추천보다 내 원칙이 우선이다', who:'투자 커뮤니티 유행어' },
+  { text: '"지금 아니면 안 된다"는 조급함, 대부분 착각이다', who:'투자 커뮤니티 자조 개그' },
+  { text: '수익률 인증보다 원칙을 지킨 기록이 더 오래 남는다', who:'투자 커뮤니티 유행어' }
+];
+
+/* ================= 투자 나침반 (온보딩 성향 진단) ================= */
+const COMPASS_QUESTIONS = [
+  { q:'투자의 가장 큰 목적은 무엇인가요?', options:[
+    { label:'노후 대비, 장기적인 자산 형성', tag:'diversify' },
+    { label:'목돈 마련 (내 집 마련, 결혼 자금 등)', tag:'value' },
+    { label:'빠른 수익 실현', tag:'growth' },
+    { label:'투자 공부를 겸한 소액 투자', tag:'psychology' }
+  ]},
+  { q:'지금 투자한 돈을 얼마나 오래 묻어둘 수 있나요?', options:[
+    { label:'1년 이내에 필요할 수도 있다', tag:'growth' },
+    { label:'1~3년 정도는 괜찮다', tag:'psychology' },
+    { label:'3~10년은 신경 쓰지 않아도 된다', tag:'value' },
+    { label:'10년 이상, 아주 여유롭다', tag:'diversify' }
+  ]},
+  { q:'투자한 돈이 반토막(-50%) 난다면 어떻게 할 것 같나요?', options:[
+    { label:'바로 전액 매도한다', tag:'diversify' },
+    { label:'일부라도 매도해서 손실을 줄인다', tag:'psychology' },
+    { label:'힘들어도 버틴다', tag:'value' },
+    { label:'오히려 기회로 보고 더 산다', tag:'growth' }
+  ]},
+  { q:'투자 경험은 어느 정도인가요?', options:[
+    { label:'이번이 사실상 처음이다', tag:'diversify' },
+    { label:'1~2년차, 아직 배우는 중이다', tag:'psychology' },
+    { label:'3년 이상, 어느 정도 안다', tag:'value' },
+    { label:'전문적으로 공부하고 투자한다', tag:'growth' }
+  ]},
+  { q:'다음 중 가장 끌리는 투자 방식은?', options:[
+    { label:'적금처럼 안전하게, 시장 전체에 나눠 담는다', tag:'diversify' },
+    { label:'저평가된 좋은 회사를 발굴해 산다', tag:'value' },
+    { label:'앞으로 크게 성장할 기업을 먼저 찾는다', tag:'growth' },
+    { label:'잘 모르겠다, 추천을 받고 싶다', tag:null }
+  ]}
+];
+const COMPASS_RESULT_META = {
+  value: { title:'신중한 가치투자자', emoji:'🧱', desc:'회사의 진짜 가치보다 쌀 때 사고, 손해를 줄일 여유분을 항상 남겨두는 스타일이 잘 맞아요.', catIndex:0 },
+  growth: { title:'미래를 보는 성장투자자', emoji:'🚀', desc:'앞으로 크게 성장할 기업을 남들보다 먼저 발견하고 오래 지켜보는 스타일이 잘 맞아요.', catIndex:1 },
+  diversify: { title:'안정을 우선하는 분산투자자', emoji:'🧺', desc:'한 종목에 집중하기보다 폭넓게 나누어 담아 위험을 낮추는 스타일이 잘 맞아요.', catIndex:2 },
+  psychology: { title:'단단하게 성장 중인 투자자', emoji:'🧘', desc:'아직은 배우는 단계인 만큼, 감정에 휘둘리지 않고 인내하는 태도부터 다지는 것이 잘 맞아요.', catIndex:3 }
+};
+
+function openCompassQuiz() {
+  let step = 0;
+  const answers = [];
+  function renderStep() {
+    if (step < COMPASS_QUESTIONS.length) {
+      const q = COMPASS_QUESTIONS[step];
+      openModal(`🧭 투자 나침반 (${step+1}/${COMPASS_QUESTIONS.length})`, `
+        <p class="text-sm font-semibold mb-4">${escapeHtml(q.q)}</p>
+        <div class="space-y-2.5">
+          ${q.options.map((o,i)=>`<button data-opt="${i}" class="row p-3.5 w-full text-left text-sm compass-opt">${escapeHtml(o.label)}</button>`).join('')}
+        </div>
+      `, step>0 ? `<button id="compass-back" class="btn-ghost px-4 py-2.5 rounded-xl text-sm">이전</button>` : '');
+      document.querySelectorAll('.compass-opt').forEach(b => b.onclick = () => { answers[step] = q.options[+b.dataset.opt].tag; step++; renderStep(); });
+      if (step>0) document.getElementById('compass-back').onclick = () => { step--; renderStep(); };
+    } else {
+      const tally = {};
+      answers.forEach(t => { if (t) tally[t] = (tally[t]||0)+1; });
+      let best = 'diversify', bestCount = -1;
+      Object.entries(tally).forEach(([k,v]) => { if (v>bestCount) { best=k; bestCount=v; } });
+      const meta = COMPASS_RESULT_META[best];
+      const cat = INVESTOR_CATEGORIES[meta.catIndex];
+      openModal('🧭 나의 투자 나침반 결과', `
+        <div class="text-center mb-4"><span class="text-4xl">${meta.emoji}</span><p class="font-bold text-lg mt-2">${meta.title}</p><p class="text-xs text-muted mt-1">${meta.desc}</p></div>
+        <div class="row p-3.5 mb-3"><p class="text-xs font-semibold text-brand mb-1">추천 카테고리 · ${cat.category}</p><p class="text-[11px] text-muted">${cat.desc}</p></div>
+        <p class="text-xs text-muted mb-2">아래 항목을 내 투자 원칙에 바로 추가할 수 있어요.</p>
+        <label class="row p-3 flex items-center gap-2.5 mb-2"><input type="checkbox" id="compass-add-summary" checked><span class="text-xs">나의 투자 나침반 결과 요약 추가</span></label>
+        ${cat.investors.map((t,i)=>`<label class="row p-3 flex items-center gap-2.5 mb-2"><input type="checkbox" class="compass-add-investor" data-ii="${i}" checked><span class="text-xs">${t.name}의 원칙 추가</span></label>`).join('')}
+      `, `
+        <button class="btn-ghost px-4 py-2.5 rounded-xl text-sm" onclick="closeModal()">닫기</button>
+        <button id="compass-finish" class="btn-brand px-4 py-2.5 rounded-xl text-sm">선택 항목 추가</button>
+      `);
+      document.getElementById('compass-finish').onclick = () => {
+        let count = 0;
+        if (document.getElementById('compass-add-summary').checked) {
+          const answerLabels = answers.map((t,i)=>COMPASS_QUESTIONS[i].options.find(o=>o.tag===t)?.label||'').filter(Boolean);
+          state.principles.push({ id: uid(), title:'나의 투자 나침반 결과', body:`추천 유형: ${meta.title}\n${meta.desc}\n\n[답변 요약]\n${answerLabels.map(l=>'· '+l).join('\n')}`, source:'투자 나침반 테스트', createdAt: Date.now() });
+          count++;
+        }
+        document.querySelectorAll('.compass-add-investor:checked').forEach(cb => {
+          const t = cat.investors[+cb.dataset.ii];
+          state.principles.push({ id: uid(), title:`${t.name}의 원칙`, body: t.points.map(p=>'· '+p).join('\n'), source: t.name, createdAt: Date.now() });
+          count++;
+        });
+        save(LS.principles, state.principles);
+        closeModal(); renderers.principles(); toast(`${count}개 원칙을 추가했습니다.`, 'success');
+      };
+    }
+  }
+  renderStep();
+}
+
+/* ================= PORTFOLIO / FX MATH ================= */
+function holdingKRW(h) {
+  const rate = state.fx.rate || 1;
+  const factor = h.currency==='USD' ? rate : 1;
+  return { value: h.quantity*h.currentPrice*factor, cost: h.quantity*h.avgPrice*factor };
+}
+function computePortfolioStats() {
+  let totalValue=0, totalCost=0, coreValue=0, satValue=0;
+  state.portfolio.forEach(h => {
+    const { value, cost } = holdingKRW(h);
+    totalValue += value; totalCost += cost;
+    if (h.type === 'core') coreValue += value; else satValue += value;
+  });
+  const returnPct = totalCost>0 ? (totalValue-totalCost)/totalCost*100 : 0;
+  return { totalValue, totalCost, coreValue, satValue, returnPct };
+}
+function realizedSummary() {
+  let pnl=0, costBasis=0;
+  state.transactions.filter(t=>t.type==='sell').forEach(t => {
+    const factor = t.currency==='USD' ? (state.fx.rate||1) : 1;
+    pnl += t.realizedPnL*factor;
+    costBasis += t.avgPriceAtTime*t.quantity*factor;
+  });
+  return { pnl, costBasis };
+}
+function holdingRealizedPnL(holdingId) {
+  let sum = 0;
+  state.transactions.filter(t=>t.type==='sell' && t.holdingId===holdingId).forEach(t => {
+    const factor = t.currency==='USD' ? (state.fx.rate||1) : 1;
+    sum += t.realizedPnL*factor;
+  });
+  return sum;
+}
+function closedPositionsSummary() {
+  const openIds = new Set(state.portfolio.map(h=>h.id));
+  const map = {};
+  state.transactions.filter(t=>t.type==='sell' && !openIds.has(t.holdingId)).forEach(t => {
+    const factor = t.currency==='USD' ? (state.fx.rate||1) : 1;
+    if (!map[t.holdingId]) map[t.holdingId] = { name:t.name, profit:0 };
+    map[t.holdingId].profit += t.realizedPnL*factor;
+  });
+  return Object.values(map);
+}
+function snapshotToday() {
+  const { totalValue, totalCost } = computePortfolioStats();
+  const idx = state.snapshots.findIndex(s => s.date === todayStr());
+  const entry = { date: todayStr(), totalValue, totalCost };
+  if (idx >= 0) state.snapshots[idx] = entry; else state.snapshots.push(entry);
+  state.snapshots.sort((a,b)=> a.date.localeCompare(b.date));
+  save(LS.snapshots, state.snapshots);
+}
+
+/* ================= MARKET DATA SYNC (시세 · 환율 · 지수) ================= */
+async function fetchFxRate() {
+  try {
+    if (state.settings.twelveDataKey) {
+      const res = await fetch(`https://api.twelvedata.com/price?symbol=USD/KRW&apikey=${encodeURIComponent(state.settings.twelveDataKey)}`);
+      const data = await res.json();
+      if (data.price && !isNaN(+data.price)) { state.fx = { rate:+data.price, updatedAt:Date.now() }; save(LS.fx, state.fx); return true; }
+    }
+    const res2 = await fetch('https://open.er-api.com/v6/latest/USD');
+    const data2 = await res2.json();
+    if (data2.rates && data2.rates.KRW) { state.fx = { rate:+data2.rates.KRW, updatedAt:Date.now() }; save(LS.fx, state.fx); return true; }
+  } catch(e) {}
+  return false;
+}
+async function syncStockPrices() {
+  const key = state.settings.twelveDataKey;
+  if (!key) return { ok:0, fail:0, skipped:true };
+  const withTicker = state.portfolio.filter(h=>h.ticker);
+  if (!withTicker.length) return { ok:0, fail:0, skipped:false };
+  const groups = {};
+  withTicker.forEach(h => { const ex = h.exchange||''; (groups[ex]=groups[ex]||[]).push(h); });
+  let ok=0, fail=0;
+  for (const ex of Object.keys(groups)) {
+    const hs = groups[ex];
+    const symbols = [...new Set(hs.map(h=>h.ticker))].join(',');
+    let url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(symbols)}&apikey=${encodeURIComponent(key)}`;
+    if (ex) url += `&exchange=${encodeURIComponent(ex)}`;
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      hs.forEach(h => {
+        let priceStr;
+        if (data.price !== undefined) priceStr = data.price;
+        else if (data[h.ticker] && data[h.ticker].price !== undefined) priceStr = data[h.ticker].price;
+        if (priceStr && !isNaN(+priceStr)) { h.currentPrice = +priceStr; h.priceUpdatedAt = Date.now(); ok++; }
+        else fail++;
+      });
+    } catch(e) { fail += hs.length; }
+    await new Promise(r=>setTimeout(r, 800));
+  }
+  save(LS.portfolio, state.portfolio);
+  return { ok, fail, skipped:false };
+}
+async function fetchMarketSnapshot() {
+  const key = state.settings.twelveDataKey;
+  if (!key) return null;
+  const symbols = [
+    { label:'코스피', symbol:'KOSPI', exchange:'KRX' },
+    { label:'S&P500(SPY)', symbol:'SPY', exchange:'' },
+    { label:'나스닥(QQQ)', symbol:'QQQ', exchange:'' }
+  ];
+  const items = [];
+  for (const s of symbols) {
+    let url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(s.symbol)}&apikey=${encodeURIComponent(key)}`;
+    if (s.exchange) url += `&exchange=${encodeURIComponent(s.exchange)}`;
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.close) items.push({ label:s.label, close:+data.close, pct:+(data.percent_change||0) });
+    } catch(e) {}
+    await new Promise(r=>setTimeout(r, 600));
+  }
+  if (items.length) { state.marketSnapshot = { date: todayStr(), items }; save(LS.market, state.marketSnapshot); }
+  return items;
+}
+async function refreshMarketData(showToast) {
+  if (showToast) toast('환율·시세·지수·뉴스를 불러오는 중...', 'info');
+  const fxOk = await fetchFxRate();
+  const priceResult = await syncStockPrices();
+  await fetchMarketSnapshot();
+  await fetchAllNewsKeywords();
+  snapshotToday();
+  localStorage.setItem('fomoguard_last_sync_date', todayStr());
+  if (showToast) {
+    if (priceResult.skipped) toast(fxOk ? '환율을 갱신했습니다. (Twelve Data 키가 없어 종목 시세·지수는 갱신하지 않았습니다)' : '갱신에 실패했습니다.', fxOk?'info':'error');
+    else toast(`갱신 완료 (시세 성공 ${priceResult.ok} · 실패 ${priceResult.fail})`, priceResult.fail?'warn':'success');
+  }
+  if (renderers[currentTab]) renderers[currentTab]();
+  if (hasApiKey() && (!state.dailyAnalysis || state.dailyAnalysis.date !== todayStr())) {
+    await generateDailyAnalysis(true);
+  }
+}
+
+/* ================= AI 데일리 분석 ================= */
+async function generateDailyAnalysis(silent) {
+  if (!hasApiKey()) { if (!silent) { toast('설정에서 API 키를 먼저 등록해주세요.', 'error'); switchTab('settings'); } return; }
+  const box = document.getElementById('daily-analysis-text');
+  if (box) box.innerHTML = `<span class="inline-block spin">⏳</span> 분석 생성 중...`;
+  const principlesText = state.principles.length ? state.principles.map(p=>`- [${p.source}] ${p.title}`).join('\n') : '(등록된 원칙 없음)';
+  const portfolioText = state.portfolio.length ? state.portfolio.map(h=>{ const ret = h.avgPrice>0?(h.currentPrice-h.avgPrice)/h.avgPrice*100:0; return `- ${h.name}(${h.type==='core'?'코어':'위성'}): ${fmtPct(ret)}`; }).join('\n') : '(보유 종목 없음)';
+  const marketText = state.marketSnapshot && state.marketSnapshot.items.length ? state.marketSnapshot.items.map(i=>`- ${i.label}: ${fmtPct(i.pct)}`).join('\n') : '(시장 지표 없음)';
+  const realized = realizedSummary();
+
+  const systemPrompt = `당신은 '포모가드'의 데일리 브리핑 작성자입니다. 확인되지 않은 뉴스나 사건을 절대 지어내지 마세요. 오직 제공된 시장 지표 수치와 사용자의 투자 원칙, 포트폴리오 현황만 근거로 3~4문장의 짧고 담백한 한국어 데일리 코멘트를 작성하세요. 과장하거나 확정적인 예측을 하지 말고, 사용자가 스스로 판단하도록 돕는 담담한 톤을 유지하세요. 다른 설명 없이 코멘트 본문만 출력하세요.`;
+  const userPrompt = `[오늘 날짜] ${todayStr()}\n[시장 지표 등락률]\n${marketText}\n\n[나의 투자 원칙]\n${principlesText}\n\n[내 포트폴리오 현황(종목별 수익률)]\n${portfolioText}\n\n[누적 실현손익] ${Math.round(realized.pnl).toLocaleString()}원\n\n위 정보를 바탕으로 오늘 하루 참고할 짧은 데일리 코멘트를 작성해줘.`;
+
+  try {
+    const text = (await callAI({ system: systemPrompt, user: userPrompt, maxTokens: 400 })).trim();
+    state.dailyAnalysis = { date: todayStr(), text: text || '분석을 생성하지 못했습니다.' };
+    save(LS.dailyAnalysis, state.dailyAnalysis);
+    if (currentTab === 'dashboard') renderers.dashboard();
+  } catch (err) {
+    if (box) box.innerHTML = `<span class="text-bad text-xs">분석 생성 실패: ${escapeHtml(err.message)}</span>`;
+    if (!silent) toast('데일리 분석 생성 중 오류가 발생했습니다.', 'error');
+  }
+}
+
+/* ================= 실시간 뉴스 (관심 키워드, GNews 기반 헤드라인+요약) ================= */
+async function fetchNewsForKeyword(keyword) {
+  const key = state.settings.newsApiKey;
+  if (!key) return null;
+  try {
+    const fromDate = new Date(Date.now() - 3*86400000).toISOString();
+    const url = `https://gnews.io/api/v4/search?q=${encodeURIComponent(keyword)}&sortby=publishedAt&from=${encodeURIComponent(fromDate)}&max=10&apikey=${encodeURIComponent(key)}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!Array.isArray(data.articles)) return null;
+    let items = data.articles.map(a => ({ title:a.title||'', url:a.url||'#', source:a.source?.name||'', publishedAt:a.publishedAt||'', description:a.description||'' }));
+    const cutoff = Date.now() - 3*86400000;
+    items = items.filter(it => { const t = Date.parse(it.publishedAt); return !isNaN(t) && t >= cutoff; });
+    items.sort((a,b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt));
+    items = items.slice(0, 8);
+    state.newsCache[keyword] = { date: todayStr(), items };
+    save(LS.newsCache, state.newsCache);
+    return items;
+  } catch(e) { return null; }
+}
+async function fetchAllNewsKeywords() {
+  if (!state.settings.newsApiKey || !state.newsKeywords.length) return;
+  for (const k of state.newsKeywords) {
+    const cached = state.newsCache[k];
+    if (cached && cached.date === todayStr()) continue;
+    await fetchNewsForKeyword(k);
+    await new Promise(r=>setTimeout(r, 400));
+  }
+}
+renderers.news = function() {
+  const el = document.getElementById('panel-news');
+  el.innerHTML = `
+    <h2 class="font-bold text-xl mt-2 mb-1">📰 실시간 뉴스</h2>
+    <p class="text-xs text-muted mb-4">관심 키워드(종목, 시장, 인물, 주제 등)를 등록하면 최근 3일 이내 헤드라인·요약을 최신순으로, 하루 1회 자동 + 언제든 수동으로 갱신해드려요.</p>
+    <div class="flex gap-2 mb-3">
+      <input id="news-kw-input" type="text" placeholder="예: 미국증시, 삼성전자, 반도체">
+      <button id="news-kw-add" class="btn-brand px-4 rounded-xl text-sm font-bold whitespace-nowrap">추가</button>
+    </div>
+    ${state.newsKeywords.length ? `<div class="flex gap-1.5 flex-wrap mb-4" id="news-kw-chips"></div>` : `<div class="card p-6 text-center text-sm text-muted mb-4">등록된 관심 키워드가 없습니다. 위에서 추가해보세요.</div>`}
+    ${!state.settings.newsApiKey ? `<div class="card p-4 mb-4 border border-warn/30"><p class="text-xs text-warn">⚠️ 설정에서 뉴스 API 키를 등록해야 실제 뉴스를 불러올 수 있어요.</p></div>` : ''}
+    <div id="news-feed" class="space-y-4"></div>
+  `;
+  document.getElementById('news-kw-add').onclick = () => {
+    const inp = document.getElementById('news-kw-input');
+    const v = inp.value.trim();
+    if (!v) return;
+    if (!state.newsKeywords.includes(v)) { state.newsKeywords.push(v); save(LS.newsKeywords, state.newsKeywords); }
+    inp.value = '';
+    renderers.news();
+  };
+  if (state.newsKeywords.length) {
+    const chipsEl = document.getElementById('news-kw-chips');
+    chipsEl.innerHTML = state.newsKeywords.map(k => `<span class="chip flex items-center gap-1.5">${escapeHtml(k)}<button data-rmkw="${escapeHtml(k)}" class="text-white/70">✕</button></span>`).join('');
+    chipsEl.querySelectorAll('[data-rmkw]').forEach(b => b.onclick = () => {
+      state.newsKeywords = state.newsKeywords.filter(k=>k!==b.dataset.rmkw);
+      delete state.newsCache[b.dataset.rmkw];
+      save(LS.newsKeywords, state.newsKeywords); save(LS.newsCache, state.newsCache);
+      renderers.news();
+    });
+  }
+  const feed = document.getElementById('news-feed');
+  feed.innerHTML = state.newsKeywords.map((k,i) => `
+    <div class="card p-4">
+      <div class="flex items-center justify-between mb-3">
+        <p class="text-sm font-bold text-brand">🔎 ${escapeHtml(k)}</p>
+        <button data-refreshkw="${escapeHtml(k)}" class="text-[11px] text-muted font-semibold">🔄 새로고침</button>
+      </div>
+      <div id="news-block-${i}" class="space-y-3"></div>
+    </div>
+  `).join('');
+  feed.querySelectorAll('[data-refreshkw]').forEach(b => b.onclick = () => loadKeywordNews(b.dataset.refreshkw, true));
+  state.newsKeywords.forEach(k => loadKeywordNews(k, false));
+};
+async function loadKeywordNews(keyword, forceRefresh) {
+  const idx = state.newsKeywords.indexOf(keyword);
+  if (idx === -1) return;
+  const blockEl = document.getElementById('news-block-'+idx);
+  if (!blockEl) return;
+  const cached = state.newsCache[keyword];
+  if (!forceRefresh && cached && cached.date === todayStr()) { renderNewsItems(blockEl, cached.items); return; }
+  if (!state.settings.newsApiKey) { blockEl.innerHTML = `<p class="text-xs text-muted">뉴스 API 키를 등록하면 이 키워드의 최신 뉴스를 볼 수 있어요.</p>`; return; }
+  blockEl.innerHTML = `<p class="text-xs text-muted"><span class="inline-block spin">⏳</span> 최신 뉴스를 불러오는 중...</p>`;
+  const items = await fetchNewsForKeyword(keyword);
+  if (items === null) { blockEl.innerHTML = `<p class="text-xs text-muted">뉴스를 불러오지 못했습니다. 키가 올바른지 확인하거나 잠시 후 다시 시도해주세요.</p>`; return; }
+  if (items.length === 0) { blockEl.innerHTML = `<p class="text-xs text-muted">최근 3일 내 관련 뉴스가 없습니다.</p>`; return; }
+  renderNewsItems(blockEl, items);
+}
+function renderNewsItems(blockEl, items) {
+  blockEl.innerHTML = items.map(a => `
+    <a href="${escapeHtml(a.url)}" target="_blank" rel="noopener" class="row p-3.5 block">
+      <p class="text-sm font-semibold leading-snug">${escapeHtml(a.title)}</p>
+      ${a.description ? `<p class="text-xs text-muted mt-1 line-clamp-2">${escapeHtml(a.description.slice(0,120))}</p>` : ''}
+      <p class="text-[10px] text-muted mt-1.5">${escapeHtml(a.source)} · ${daysAgoLabel(a.publishedAt)}</p>
+    </a>
+  `).join('');
+}
+
+/* ================= TREEMAP (squarify) ================= */
+function squarify(items, x, y, w, h) {
+  const total = items.reduce((s,i)=>s+i.value,0) || 1;
+  const areaTotal = Math.max(w*h, 1);
+  const scaled = items.map(i => ({ ...i, area: i.value/total*areaTotal })).sort((a,b)=>b.area-a.area);
+  const rects = [];
+  function worst(row, length) {
+    if (!row.length) return Infinity;
+    const sum = row.reduce((a,b)=>a+b.area,0);
+    let rmax=-Infinity, rmin=Infinity;
+    row.forEach(r => { if (r.area>rmax) rmax=r.area; if (r.area<rmin) rmin=r.area; });
+    return Math.max((length*length*rmax)/(sum*sum), (sum*sum)/(length*length*rmin));
+  }
+  function layoutRow(row, x, y, w, h) {
+    const sum = row.reduce((a,b)=>a+b.area,0);
+    const out = [];
+    if (w >= h) {
+      const stripW = sum / h;
+      let cy = y;
+      row.forEach(it => { const rh = it.area/stripW; out.push({ ...it, rx:x, ry:cy, rw:stripW, rh }); cy += rh; });
+      return { out, nx:x+stripW, ny:y, nw:w-stripW, nh:h };
+    } else {
+      const stripH = sum / w;
+      let cx = x;
+      row.forEach(it => { const rw = it.area/stripH; out.push({ ...it, rx:cx, ry:y, rw, rh:stripH }); cx += rw; });
+      return { out, nx:x, ny:y+stripH, nw:w, nh:h-stripH };
+    }
+  }
+  function recurse(remaining, row, x, y, w, h) {
+    if (!remaining.length) { if (row.length) { const { out } = layoutRow(row,x,y,w,h); rects.push(...out); } return; }
+    const length = Math.min(w,h);
+    const next = remaining[0];
+    const newRow = row.concat([next]);
+    if (!row.length || worst(row,length) >= worst(newRow,length)) {
+      recurse(remaining.slice(1), newRow, x, y, w, h);
+    } else {
+      const { out, nx, ny, nw, nh } = layoutRow(row, x, y, w, h);
+      rects.push(...out);
+      recurse(remaining, [], nx, ny, nw, nh);
+    }
+  }
+  recurse(scaled, [], x, y, w, h);
+  return rects;
+}
+function renderTreemap() {
+  const container = document.getElementById('treemap-wrap');
+  if (!container) return;
+  const w = container.clientWidth;
+  const totalH = 260;
+  const coreHoldings = state.portfolio.filter(h=>h.type==='core');
+  const satHoldings = state.portfolio.filter(h=>h.type!=='core');
+  const coreVal = coreHoldings.reduce((s,h)=>s+holdingKRW(h).value,0);
+  const satVal = satHoldings.reduce((s,h)=>s+holdingKRW(h).value,0);
+  const totalVal = (coreVal+satVal) || 1;
+  let hCore;
+  if (coreVal>0 && satVal>0) { hCore = Math.min(Math.max(totalH*coreVal/totalVal, 50), totalH-50); }
+  else if (coreVal>0) { hCore = totalH; } else { hCore = 0; }
+  const hSat = totalH - hCore;
+
+  function bandHtml(holdings, val, label, bandH) {
+    if (!holdings.length || bandH<=0) return '';
+    const items = holdings.map(h => ({ h, value: Math.max(holdingKRW(h).value,1) }));
+    const rects = squarify(items, 0, 0, w, bandH);
+    const tiles = rects.map(r => {
+      const h = r.h;
+      const ret = h.avgPrice>0 ? (h.currentPrice-h.avgPrice)/h.avgPrice*100 : 0;
+      const color = retColor(ret);
+      const showText = r.rw>44 && r.rh>28;
+      return `<div class="absolute rounded-[6px] flex flex-col items-center justify-center overflow-hidden" style="left:${r.rx}px;top:${r.ry}px;width:${Math.max(r.rw-2,0)}px;height:${Math.max(r.rh-2,0)}px;background:${color}">
+        ${showText ? `<span class="text-[11px] font-bold leading-tight px-1 truncate w-full text-center text-white">${escapeHtml(h.name)}</span><span class="text-[10px] leading-tight text-white/90">${fmtPct(ret)}</span>` : ''}
+      </div>`;
+    }).join('');
+    return `<p class="text-[11px] text-muted font-semibold mb-1">${label} · ${fmtWon(val)}</p><div class="relative mb-2" style="width:100%;height:${bandH}px">${tiles}</div>`;
+  }
+  container.innerHTML = bandHtml(coreHoldings, coreVal, '🔵 코어', hCore) + bandHtml(satHoldings, satVal, '🟢 위성', hSat);
+}
+
+/* ================= DASHBOARD ================= */
+let chartDonut, chartCore, chartTrend;
+renderers.dashboard = function() {
+  const el = document.getElementById('panel-dashboard');
+  const { totalValue, totalCost, coreValue, satValue, returnPct } = computePortfolioStats();
+  const realized = realizedSummary();
+  const returnColor = returnPct > 0 ? 'text-up' : returnPct < 0 ? 'text-down' : 'text-muted';
+  const arrow = returnPct > 0 ? '▲' : returnPct < 0 ? '▼' : '';
+  const hasData = state.portfolio.length > 0;
+  const unrealizedPnl = totalValue - totalCost;
+  const totalPnl = unrealizedPnl + realized.pnl;
+  const lastFc = state.factchecks[state.factchecks.length-1];
+  const todayJournal = state.journal.find(j=>j.date===todayStr());
+  const q = quoteOfTheDay();
+
+  el.innerHTML = `
+    <div class="card p-5 mt-2 mb-3">
+      <p class="text-xs text-muted mb-1.5">총 평가 자산 (원화 기준)</p>
+      <p class="text-[32px] font-extrabold leading-tight tracking-tight">${fmtWon(totalValue)}</p>
+      ${hasData ? `<div class="flex items-center gap-1.5 mt-1.5">
+        <span class="badge ${returnPct>0?'bg-up/15 text-up':returnPct<0?'bg-down/15 text-down':'bg-line text-muted'}">${arrow} ${fmtPct(returnPct)}</span>
+        <span class="text-xs ${returnColor} font-semibold">${unrealizedPnl>=0?'+':''}${fmtWon(unrealizedPnl)}</span>
+      </div>` : `<p class="text-xs text-muted mt-1.5">포트폴리오 탭에서 보유 종목을 추가해보세요</p>`}
+    </div>
+
+    <div class="row p-3 mb-3">
+      <p class="text-[10px] text-muted mb-1">💬 오늘의 투자 격언</p>
+      <p class="text-xs leading-relaxed">"${escapeHtml(q.text)}" <span class="text-muted">— ${escapeHtml(q.who)}</span></p>
+    </div>
+
+    <div class="grid grid-cols-2 gap-2 mb-3">
+      <div class="row p-3"><p class="text-[10px] text-muted mb-1">총 매수금액</p><p class="text-sm font-bold">${fmtWon(totalCost)}</p></div>
+      <div class="row p-3"><p class="text-[10px] text-muted mb-1">평가손익 (미실현)</p><p class="text-sm font-bold ${unrealizedPnl>=0?'text-up':'text-down'}">${unrealizedPnl>=0?'+':''}${fmtWon(unrealizedPnl)}</p></div>
+      <div class="row p-3"><p class="text-[10px] text-muted mb-1">실현손익 (매도 확정)</p><p class="text-sm font-bold ${realized.pnl>=0?'text-up':'text-down'}">${realized.pnl>=0?'+':''}${fmtWon(realized.pnl)}</p></div>
+      <div class="row p-3"><p class="text-[10px] text-muted mb-1">총손익 (평가+실현)</p><p class="text-sm font-bold ${totalPnl>=0?'text-up':'text-down'}">${totalPnl>=0?'+':''}${fmtWon(totalPnl)}</p></div>
+      <button id="cell-fx" class="row p-3 text-left">
+        <p class="text-[10px] text-muted mb-1">환율(USD/KRW)</p>
+        <p class="text-sm font-bold">${state.fx.rate ? Math.round(state.fx.rate).toLocaleString()+'원' : '-'}</p>
+        <p class="text-[9px] text-muted mt-0.5">${timeAgo(state.fx.updatedAt)} 갱신</p>
+      </button>
+      <div class="row p-3"><p class="text-[10px] text-muted mb-1">총 수익률 (보유중)</p><p class="text-sm font-bold ${returnColor}">${hasData?fmtPct(returnPct):'-'}</p></div>
+    </div>
+    <button id="btn-refresh-market" class="text-[11px] text-brand font-semibold mb-4 flex items-center gap-1">🔄 환율·시세·지수·뉴스 새로고침</button>
+
+    <div class="card p-4 mb-3">
+      <p class="text-sm font-semibold mb-3">📰 오늘의 시장 &amp; AI 데일리 분석</p>
+      ${state.marketSnapshot && state.marketSnapshot.date===todayStr() ? `
+        <div class="grid grid-cols-3 gap-2 mb-3">
+          ${state.marketSnapshot.items.map(i => `<div class="row p-2.5 text-center"><p class="text-[10px] text-muted mb-1">${i.label}</p><p class="text-xs font-bold ${i.pct>=0?'text-up':'text-down'}">${fmtPct(i.pct)}</p></div>`).join('')}
+        </div>
+      ` : `<p class="text-xs text-muted mb-3">설정에서 Twelve Data API 키를 등록하면 코스피·S&amp;P500·나스닥 등락률을 볼 수 있어요.</p>`}
+      <div id="daily-analysis-text" class="text-sm text-[#c6cbd9] leading-relaxed mb-3">${state.dailyAnalysis && state.dailyAnalysis.date===todayStr() ? escapeHtml(state.dailyAnalysis.text) : '아직 오늘의 분석이 없습니다. 아래 버튼으로 생성해보세요.'}</div>
+      <button id="btn-daily-analysis" class="btn-ghost w-full py-2.5 rounded-xl text-xs font-semibold">${state.dailyAnalysis && state.dailyAnalysis.date===todayStr() ? '🔄 다시 생성하기' : '🤖 오늘의 분석 생성하기'}</button>
+      <p class="text-[10px] text-muted mt-2">실시간 뉴스가 아닌, 시장 지표와 등록하신 투자 원칙·포트폴리오를 근거로 AI가 작성한 참고용 코멘트입니다.</p>
+    </div>
+
+    ${hasData ? `
+    <div class="card p-4 mb-3">
+      <p class="text-sm font-semibold mb-3">🗺️ 자산 트리맵 <span class="text-[11px] text-muted font-normal">· 코어/위성 · 크기=비중, 색=수익률</span></p>
+      <div id="treemap-wrap"></div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3 mb-3">
+      <div class="card p-3">
+        <p class="text-xs font-semibold mb-2">종목별 비중</p>
+        <canvas id="chart-donut" height="140"></canvas>
+        <div id="legend-donut" class="mt-2 space-y-1"></div>
+      </div>
+      <div class="card p-3">
+        <p class="text-xs font-semibold mb-2">코어 · 위성 비중</p>
+        <canvas id="chart-core" height="140"></canvas>
+        <div id="legend-core" class="mt-2 space-y-1"></div>
+      </div>
+    </div>
+    ` : ''}
+
+    <div class="card p-4 mb-3">
+      <p class="text-sm font-semibold mb-3">💹 종목별 수익 기여도 <span class="text-[11px] text-muted font-normal">· 보유중 평가손익 + 실현손익</span></p>
+      <div id="contribution-wrap"></div>
+    </div>
+
+    ${hasData ? `
+    <div class="card p-4 mb-3">
+      <p class="text-sm font-semibold mb-3">자산가치 추이</p>
+      ${state.snapshots.length > 1 ? '<canvas id="chart-trend" height="160"></canvas>' : '<p class="text-xs text-muted py-6 text-center">이틀 이상 기록되면 추이가 표시됩니다</p>'}
+    </div>
+    ` : ''}
+
+    <button data-goto="factcheck" class="card p-4 mb-3 w-full text-left flex items-center justify-between">
+      <div>
+        <p class="text-sm font-semibold">🧊 최근 포모체크</p>
+        <p class="text-xs text-muted mt-0.5">${lastFc ? `${escapeHtml(lastFc.ticker)} · ${lastFc.result?.verdict||''}` : '지금 하려는 투자를 검증해보세요'}</p>
+      </div>
+      <span class="text-muted">›</span>
+    </button>
+    <button data-goto="journal" class="card p-4 mb-3 w-full text-left flex items-center justify-between">
+      <div>
+        <p class="text-sm font-semibold">📓 오늘의 투자일지</p>
+        <p class="text-xs text-muted mt-0.5">${todayJournal ? '오늘 기록을 이미 작성했어요' : '오늘의 판단과 심리를 기록해보세요'}</p>
+      </div>
+      <span class="text-muted">›</span>
+    </button>
+  `;
+  el.querySelectorAll('[data-goto]').forEach(b => b.onclick = () => switchTab(b.dataset.goto));
+  document.getElementById('cell-fx').onclick = () => refreshMarketData(true);
+  document.getElementById('btn-refresh-market').onclick = () => refreshMarketData(true);
+  document.getElementById('btn-daily-analysis').onclick = () => generateDailyAnalysis(false);
+
+  const contribRows = [
+    ...state.portfolio.map(h => { const {value,cost} = holdingKRW(h); return { name:h.name, profit: (value-cost)+holdingRealizedPnL(h.id) }; }),
+    ...closedPositionsSummary().map(c => ({ name: c.name+' (청산)', profit: c.profit }))
+  ].sort((a,b)=>b.profit-a.profit);
+  if (contribRows.length === 0) {
+    document.getElementById('contribution-wrap').innerHTML = '<p class="text-xs text-muted py-4 text-center">보유·거래 내역이 쌓이면 표시됩니다</p>';
+  } else {
+    const maxAbs = Math.max(1, ...contribRows.map(r=>Math.abs(r.profit)));
+    document.getElementById('contribution-wrap').innerHTML = contribRows.map(r => {
+      const pct = Math.abs(r.profit)/maxAbs*50;
+      const isPos = r.profit>=0;
+      return `<div class="flex items-center gap-2 mb-2.5">
+        <span class="text-[11px] w-20 truncate flex-shrink-0">${escapeHtml(r.name)}</span>
+        <div class="flex-1 h-5 relative bg-line/40 rounded overflow-hidden">
+          <div class="absolute left-1/2 top-0 bottom-0 w-px bg-line"></div>
+          ${isPos ? `<div class="absolute top-0 bottom-0 rounded" style="left:50%;width:${pct}%;background:#f04452"></div>` : `<div class="absolute top-0 bottom-0 rounded" style="right:50%;width:${pct}%;background:#3182f6"></div>`}
+        </div>
+        <span class="text-[11px] w-24 text-right flex-shrink-0 font-semibold ${isPos?'text-up':'text-down'}">${isPos?'+':''}${fmtWon(r.profit)}</span>
+      </div>`;
+    }).join('');
+  }
+
+  if (!hasData) return;
+
+  renderTreemap();
+
+  const palette = ['#3182f6','#f04452','#00c896','#ffb800','#8b5cf6','#22d3ee','#f472b6','#facc15'];
+  if (chartDonut) chartDonut.destroy();
+  if (chartCore) chartCore.destroy();
+  if (chartTrend) chartTrend.destroy();
+
+  chartDonut = new Chart(document.getElementById('chart-donut'), {
+    type: 'doughnut',
+    data: { labels: state.portfolio.map(h=>h.name), datasets: [{ data: state.portfolio.map(h=>holdingKRW(h).value), backgroundColor: palette, borderColor:'#141822', borderWidth:2 }] },
+    options: { plugins: { legend: { display:false } } }
+  });
+  const legendItems = state.portfolio.map((h,i)=>({ name:h.name, val:holdingKRW(h).value, color:palette[i%palette.length] }));
+  const totalV = legendItems.reduce((s,i)=>s+i.val,0) || 1;
+  const shown = legendItems.slice(0,5);
+  document.getElementById('legend-donut').innerHTML = shown.map(it => `<div class="flex items-center gap-1.5 text-[10px]"><span class="w-2 h-2 rounded-full flex-shrink-0" style="background:${it.color}"></span><span class="truncate flex-1">${escapeHtml(it.name)}</span><span class="text-muted">${Math.round(it.val/totalV*100)}%</span></div>`).join('') + (legendItems.length>5 ? `<p class="text-[10px] text-muted">+${legendItems.length-5}개 더</p>` : '');
+
+  chartCore = new Chart(document.getElementById('chart-core'), {
+    type: 'doughnut',
+    data: { labels:['코어','위성'], datasets:[{ data:[coreValue, satValue], backgroundColor:['#3182f6','#00c896'], borderColor:'#141822', borderWidth:2 }] },
+    options: { plugins: { legend: { display:false } } }
+  });
+  document.getElementById('legend-core').innerHTML = `
+    <div class="flex items-center gap-1.5 text-[10px]"><span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#3182f6"></span><span class="flex-1">코어</span><span class="text-muted">${totalValue>0?Math.round(coreValue/totalValue*100):0}%</span></div>
+    <div class="flex items-center gap-1.5 text-[10px]"><span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#00c896"></span><span class="flex-1">위성</span><span class="text-muted">${totalValue>0?Math.round(satValue/totalValue*100):0}%</span></div>
+  `;
+
+  if (state.snapshots.length > 1) {
+    const recent = state.snapshots.slice(-30);
+    chartTrend = new Chart(document.getElementById('chart-trend'), {
+      type: 'line',
+      data: { labels: recent.map(s=>s.date.slice(5)), datasets:[{ label:'평가금액', data: recent.map(s=>s.totalValue), borderColor:'#3182f6', backgroundColor:'rgba(49,130,246,0.1)', fill:true, tension:.3 }] },
+      options: { plugins:{ legend:{ display:false } }, scales:{ x:{ ticks:{ color:'#8b93a7' }, grid:{ color:'#1b202c' } }, y:{ ticks:{ color:'#8b93a7' }, grid:{ color:'#1b202c' } } } }
+    });
+  }
+};
+
+/* ================= FACT CHECK (포모체크) ================= */
+renderers.factcheck = function() {
+  const el = document.getElementById('panel-factcheck');
+  el.innerHTML = `
+    <h2 class="font-bold text-xl mt-2 mb-1">🧊 포모체크</h2>
+    <p class="text-xs text-muted mb-4">지금 하려는 투자를 입력하면, 등록된 나의 원칙에 비추어 AI가 냉철하게 검증합니다</p>
+
+    <div class="card p-4 mb-4 space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="text-xs text-muted mb-1 block">종목명 / 티커</label><input id="fc-ticker" type="text" placeholder="예: 테슬라"></div>
+        <div><label class="text-xs text-muted mb-1 block">투자 예정 금액</label><input id="fc-amount" type="number" placeholder="예: 3000000"></div>
+      </div>
+      <div><label class="text-xs text-muted mb-1 block">왜 지금 사려고 하나요?</label>
+        <textarea id="fc-reason" placeholder="충동을 그대로 적어주세요. 예: 오늘 급등했는데 더 오를 것 같아서"></textarea>
+      </div>
+      <button id="fc-run" class="btn-brand w-full py-3.5 rounded-xl text-sm font-bold">냉철하게 검증받기</button>
+      ${state.principles.length===0 ? '<p class="text-xs text-warn">⚠️ 등록된 투자원칙이 없어요. 더보기 → 투자원칙에서 먼저 등록하면 더 정확해집니다.</p>' : ''}
+      ${!hasApiKey() ? '<p class="text-xs text-warn">⚠️ 더보기 → 설정에서 API 키를 먼저 등록해야 실제 AI 검증이 가능합니다.</p>' : ''}
+    </div>
+
+    <div id="fc-result"></div>
+
+    <div class="mt-6">
+      <p class="text-sm font-semibold mb-2">최근 기록</p>
+      <div id="fc-history" class="space-y-2"></div>
+    </div>
+  `;
+  document.getElementById('fc-run').onclick = runFactCheck;
+  const hist = document.getElementById('fc-history');
+  const items = [...state.factchecks].reverse().slice(0,10);
+  hist.innerHTML = items.length===0 ? '<p class="text-xs text-muted">아직 기록이 없습니다.</p>' : items.map(f => {
+    const v = f.result?.verdict || '오류';
+    const color = v==='위배' ? 'text-bad' : v==='주의' ? 'text-warn' : v==='양호' ? 'text-good' : 'text-muted';
+    return `<div class="row p-3.5 flex items-center justify-between text-sm">
+      <div><span class="font-semibold">${escapeHtml(f.ticker)}</span> <span class="text-xs text-muted">${f.date}</span></div>
+      <span class="font-bold ${color}">${v}</span>
+    </div>`;
+  }).join('');
+};
+
+function verdictStyle(v) {
+  if (v === '위배') return { color:'text-bad', bg:'bg-bad/10', border:'border-bad/30', emoji:'🚫' };
+  if (v === '주의') return { color:'text-warn', bg:'bg-warn/10', border:'border-warn/30', emoji:'⚠️' };
+  return { color:'text-good', bg:'bg-good/10', border:'border-good/30', emoji:'✅' };
+}
+
+async function runFactCheck() {
+  const ticker = document.getElementById('fc-ticker').value.trim();
+  const amount = document.getElementById('fc-amount').value.trim();
+  const reason = document.getElementById('fc-reason').value.trim();
+  if (!ticker || !reason) { toast('종목명과 이유는 필수입니다.', 'warn'); return; }
+  if (!hasApiKey()) { toast('설정에서 API 키를 먼저 등록해주세요.', 'error'); switchTab('settings'); return; }
+
+  const resultBox = document.getElementById('fc-result');
+  resultBox.innerHTML = `<div class="card p-6 text-center text-sm text-muted"><span class="inline-block spin">⏳</span> AI가 원칙을 대조하는 중...</div>`;
+
+  const stats = computePortfolioStats();
+  const principlesText = state.principles.length
+    ? state.principles.map(p => `- [${p.source}] ${p.title}: ${p.body.replace(/\n/g,' ')}`).join('\n')
+    : '(등록된 원칙 없음 — 일반적인 건전 투자 원칙 기준으로 판단할 것)';
+  const portfolioText = state.portfolio.length
+    ? state.portfolio.map(h => `- ${h.name}(${h.type==='core'?'코어':'위성'}): 평가금액 ${Math.round(holdingKRW(h).value).toLocaleString()}원`).join('\n')
+    : '(등록된 보유 종목 없음)';
+  const recentJournal = state.journal.slice(-3).map(j => `- ${j.date}: ${j.content.slice(0,80)}`).join('\n') || '(기록 없음)';
+
+  const systemPrompt = `당신은 '포모가드'라는 개인 투자 집사 AI입니다. 사용자의 등록된 투자 원칙과 현재 포트폴리오, 최근 투자 일지를 참고하여, 사용자가 지금 하려는 투자가 그 원칙에 부합하는지 냉철하고 직설적으로 검증합니다. 근거 없는 응원이나 막연한 긍정은 금지합니다. 감정적 동조보다 사실과 논리를 우선하되, 무례하거나 모욕적이지는 않게 말합니다. 반드시 아래 JSON 형식으로만, 다른 텍스트 없이 답하세요:
+{"verdict":"위배 | 주의 | 양호","score":0-100 사이 정수(원칙 부합도),"summary":"핵심 총평 한두 문장","reasons":["근거 또는 우려 사항 1","근거 2","근거 3"],"advice":"지금 취해야 할 구체적 행동 조언 두세 문장"}`;
+
+  const userPrompt = `[나의 투자 원칙]\n${principlesText}\n\n[현재 포트폴리오 요약]\n총 평가금액: ${Math.round(stats.totalValue).toLocaleString()}원, 누적 수익률: ${stats.returnPct.toFixed(1)}%\n${portfolioText}\n\n[최근 투자 일지]\n${recentJournal}\n\n[지금 하려는 투자]\n종목: ${ticker}\n예정 금액: ${amount ? Math.round(+amount).toLocaleString()+'원' : '미입력'}\n이유: ${reason}\n\n위 정보를 바탕으로 이 투자가 나의 원칙에 부합하는지 JSON으로만 답변하세요.`;
+
+  try {
+    const text = await callAI({ system: systemPrompt, user: userPrompt, maxTokens: 1024 });
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('AI 응답을 해석할 수 없습니다.');
+    const result = JSON.parse(jsonMatch[0]);
+
+    const record = { id: uid(), date: todayStr(), ticker, amount: amount ? +amount : null, reason, result };
+    state.factchecks.push(record);
+    save(LS.factchecks, state.factchecks);
+
+    renderers.factcheck();
+    renderFactCheckResult(result);
+  } catch (err) {
+    resultBox.innerHTML = `<div class="card p-5 border border-bad/30 text-sm">
+      <p class="font-semibold text-bad mb-1">검증 실패</p>
+      <p class="text-muted">${escapeHtml(err.message)}</p>
+      <p class="text-xs text-muted mt-2">API 키가 올바른지, 크레딧이 남아있는지 설정에서 확인해주세요.</p>
+    </div>`;
+    toast('AI 호출 중 오류가 발생했습니다.', 'error');
+  }
+}
+
+function renderFactCheckResult(result) {
+  const box = document.getElementById('fc-result');
+  if (!box) return;
+  const s = verdictStyle(result.verdict);
+  box.innerHTML = `
+    <div class="card p-5 border ${s.border} ${s.bg} fade-in">
+      <div class="flex items-center gap-3 mb-3">
+        <span class="text-3xl">${s.emoji}</span>
+        <div>
+          <p class="text-xl font-bold ${s.color}">${escapeHtml(result.verdict)}</p>
+          <p class="text-xs text-muted">원칙 부합도 ${result.score ?? '-'}점</p>
+        </div>
+      </div>
+      <p class="text-sm mb-3">${escapeHtml(result.summary||'')}</p>
+      ${Array.isArray(result.reasons) && result.reasons.length ? `
+        <ul class="text-sm list-disc list-inside space-y-1 mb-3 text-[#c6cbd9]">
+          ${result.reasons.map(r=>`<li>${escapeHtml(r)}</li>`).join('')}
+        </ul>` : ''}
+      <div class="border-t border-line pt-3 mt-3">
+        <p class="text-xs text-muted mb-1">💡 조언</p>
+        <p class="text-sm">${escapeHtml(result.advice||'')}</p>
+      </div>
+    </div>
+  `;
+}
+
+/* ================= PORTFOLIO ================= */
+let portfolioFilter = 'all';
+renderers.portfolio = function() {
+  const el = document.getElementById('panel-portfolio');
+  const lastSync = localStorage.getItem('fomoguard_last_sync_date');
+  el.innerHTML = `
+    <div class="flex items-center justify-between mt-2 mb-3">
+      <h2 class="font-bold text-xl">💼 포트폴리오</h2>
+      <button id="btn-add-holding" class="btn-brand text-xs px-3.5 py-2.5 rounded-xl font-bold">+ 종목 추가</button>
+    </div>
+    <div class="flex items-center justify-between mb-3">
+      <div class="seg w-40" id="pf-seg">
+        <button data-f="all">전체</button><button data-f="core">코어</button><button data-f="satellite">위성</button>
+      </div>
+      <button id="btn-sync-price" class="text-xs text-brand font-semibold flex items-center gap-1">🔄 시세 새로고침</button>
+    </div>
+    ${lastSync ? `<p class="text-[11px] text-muted mb-3">마지막 자동 갱신: ${lastSync}</p>` : ''}
+    <div id="holding-list" class="space-y-2.5"></div>
+  `;
+  el.querySelectorAll('#pf-seg button').forEach(b => {
+    if (b.dataset.f === portfolioFilter) b.classList.add('active');
+    b.onclick = () => { portfolioFilter = b.dataset.f; renderers.portfolio(); };
+  });
+  document.getElementById('btn-sync-price').onclick = () => refreshMarketData(true);
+
+  const list = document.getElementById('holding-list');
+  const filtered = state.portfolio.filter(h => portfolioFilter==='all' || h.type===portfolioFilter);
+  if (filtered.length === 0) {
+    list.innerHTML = `<div class="card p-8 text-center text-sm text-muted">${state.portfolio.length===0 ? '보유 종목을 추가하면 대시보드에 비중과 수익률이 표시됩니다.' : '해당 구분의 종목이 없습니다.'}</div>`;
+  } else {
+    list.innerHTML = filtered.map(h => {
+      const cur = h.currency||'KRW';
+      const { value, cost } = holdingKRW(h);
+      const ret = cost>0 ? (value-cost)/cost*100 : 0;
+      const retColorCls = ret>0?'text-up':ret<0?'text-down':'text-muted';
+      return `<div class="card p-4">
+        <div class="flex items-start justify-between">
+          <div>
+            <p class="font-semibold text-sm">${escapeHtml(h.name)} <span class="badge ${h.type==='core'?'bg-brand/15 text-brand':'bg-good/15 text-good'}">${h.type==='core'?'코어':'위성'}</span></p>
+            <p class="text-xs text-muted mt-1">${h.quantity}주 · 평단 ${fmtPrice(h.avgPrice,cur)} · 현재가 ${fmtPrice(h.currentPrice,cur)}</p>
+            ${h.ticker ? `<p class="text-[10px] text-muted mt-0.5">${escapeHtml(h.ticker)}${h.exchange?' · '+h.exchange:''} · 시세 ${timeAgo(h.priceUpdatedAt)} 갱신</p>` : ''}
+          </div>
+          <div class="text-right">
+            <p class="text-sm font-bold ${retColorCls}">${fmtPct(ret)}</p>
+            <p class="text-xs text-muted">${fmtWon(value)}${cur==='USD'?' (환산)':''}</p>
+          </div>
+        </div>
+        <div class="flex gap-2 mt-3">
+          <button data-trade="${h.id}" class="btn-brand text-xs px-2 py-2 rounded-lg flex-1 font-bold">거래하기</button>
+          <button data-edit="${h.id}" class="btn-ghost text-xs px-2 py-2 rounded-lg flex-1">정보수정</button>
+          <button data-del="${h.id}" class="btn-ghost text-xs px-2 py-2 rounded-lg flex-1">삭제</button>
+        </div>
+      </div>`;
+    }).join('');
+    list.querySelectorAll('[data-trade]').forEach(b => b.onclick = () => openTradeForm(state.portfolio.find(h=>h.id===b.dataset.trade)));
+    list.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => openHoldingForm(state.portfolio.find(h=>h.id===b.dataset.edit)));
+    list.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+      const h = state.portfolio.find(x=>x.id===b.dataset.del);
+      if (!h) return;
+      confirmModal('종목을 삭제할까요?', `'${escapeHtml(h.name)}' 종목이 포트폴리오 목록에서 삭제됩니다. 거래내역 기록은 투자일지에 그대로 남습니다. 이 작업은 되돌릴 수 없습니다.`, () => {
+        state.portfolio = state.portfolio.filter(x=>x.id!==h.id);
+        save(LS.portfolio, state.portfolio); snapshotToday();
+        renderers.portfolio(); toast('종목을 삭제했습니다.');
+      });
+    });
+  }
+  document.getElementById('btn-add-holding').onclick = () => openHoldingForm(null);
+};
+
+function openTradeForm(h) {
+  let mode = 'buy';
+  function render() {
+    const cur = h.currency||'KRW';
+    openModal(`${escapeHtml(h.name)} 거래하기`, `
+      <div class="seg mb-4" id="trade-seg"><button data-m="buy" class="${mode==='buy'?'active':''}">매수</button><button data-m="sell" class="${mode==='sell'?'active':''}">매도</button></div>
+      <p class="text-xs text-muted mb-3">현재 보유: ${h.quantity}주 · 평단 ${fmtPrice(h.avgPrice,cur)}</p>
+      <div class="space-y-3">
+        <div><label class="text-xs text-muted mb-1 block">수량</label><input id="tf-qty" type="number" placeholder="주식 수"></div>
+        <div><label class="text-xs text-muted mb-1 block">${mode==='buy'?'매수':'매도'} 가격 (${cur} 기준, 1주당)</label><input id="tf-price" type="number" step="0.01" value="${h.currentPrice}"></div>
+      </div>
+      <div id="trade-preview" class="row p-3 mt-3 text-xs text-muted">수량과 가격을 입력하면 결과 미리보기가 표시됩니다.</div>
+    `, `
+      <button class="btn-ghost px-4 py-2.5 rounded-xl text-sm" onclick="closeModal()">취소</button>
+      <button id="tf-submit" class="btn-brand px-4 py-2.5 rounded-xl text-sm">${mode==='buy'?'매수 기록':'매도 기록'}</button>
+    `);
+    document.querySelectorAll('#trade-seg button').forEach(b => b.onclick = () => { mode = b.dataset.m; render(); });
+    const updatePreview = () => {
+      const qty = +document.getElementById('tf-qty').value || 0;
+      const price = +document.getElementById('tf-price').value || 0;
+      const box = document.getElementById('trade-preview');
+      if (!qty || !price) { box.textContent = '수량과 가격을 입력하면 결과 미리보기가 표시됩니다.'; return; }
+      if (mode === 'buy') {
+        const newQty = h.quantity+qty;
+        const newAvg = (h.quantity*h.avgPrice + qty*price)/newQty;
+        box.innerHTML = `매수 후: ${newQty}주 · 평단 ${fmtPrice(newAvg,cur)}`;
+      } else {
+        if (qty > h.quantity) { box.innerHTML = `<span class="text-bad">보유 수량(${h.quantity}주)보다 많습니다.</span>`; return; }
+        const pnl = (price-h.avgPrice)*qty;
+        const pct = h.avgPrice>0 ? (price-h.avgPrice)/h.avgPrice*100 : 0;
+        box.innerHTML = `매도 후: ${h.quantity-qty}주 남음 · 실현손익 <span class="${pnl>=0?'text-up':'text-down'}">${pnl>=0?'+':''}${fmtPrice(pnl,cur)} (${fmtPct(pct)})</span>`;
+      }
+    };
+    document.getElementById('tf-qty').oninput = updatePreview;
+    document.getElementById('tf-price').oninput = updatePreview;
+    document.getElementById('tf-submit').onclick = () => {
+      const qty = +document.getElementById('tf-qty').value;
+      const price = +document.getElementById('tf-price').value;
+      if (!qty || qty<=0 || !price || price<=0) { toast('수량과 가격을 올바르게 입력해주세요.', 'warn'); return; }
+      if (mode==='sell' && qty > h.quantity) { toast('보유 수량보다 많이 팔 수 없습니다.', 'warn'); return; }
+      if (mode === 'buy') {
+        const newQty = h.quantity+qty;
+        const newAvg = (h.quantity*h.avgPrice + qty*price)/newQty;
+        h.quantity = newQty; h.avgPrice = newAvg; h.currentPrice = price;
+        state.transactions.push({ id:uid(), date:todayStr(), holdingId:h.id, name:h.name, ticker:h.ticker, type:'buy', currency:cur, quantity:qty, price, avgPriceAtTime:newAvg, realizedPnL:null });
+      } else {
+        const pnl = (price-h.avgPrice)*qty;
+        state.transactions.push({ id:uid(), date:todayStr(), holdingId:h.id, name:h.name, ticker:h.ticker, type:'sell', currency:cur, quantity:qty, price, avgPriceAtTime:h.avgPrice, realizedPnL:pnl });
+        h.quantity -= qty; h.currentPrice = price;
+        if (h.quantity <= 0) { state.portfolio = state.portfolio.filter(x=>x.id!==h.id); }
+      }
+      save(LS.portfolio, state.portfolio); save(LS.transactions, state.transactions);
+      snapshotToday();
+      closeModal(); renderers.portfolio(); toast(mode==='buy' ? '매수 기록을 저장했습니다.' : '매도 기록을 저장했습니다.', 'success');
+    };
+  }
+  render();
+}
+
+function openHoldingForm(existing) {
+  const h = existing || { id:null, name:'', type:'core', currency:'KRW', avgPrice:'', quantity:'', currentPrice:'', ticker:'', exchange:'' };
+  const isNew = !existing;
+  openModal(isNew ? '종목 추가 (최초 매수)' : '종목 정보 수정', `
+    <div class="space-y-3">
+      <div><label class="text-xs text-muted mb-1 block">종목명</label><input id="hf-name" type="text" value="${escapeHtml(h.name)}" placeholder="예: 삼성전자"></div>
+      <div><label class="text-xs text-muted mb-1 block">구분</label>
+        <select id="hf-type"><option value="core" ${h.type==='core'?'selected':''}>코어 (핵심 장기보유)</option><option value="satellite" ${h.type==='satellite'?'selected':''}>위성 (전술적 비중)</option></select>
+      </div>
+      <div><label class="text-xs text-muted mb-1 block">매수 통화 <span class="text-muted font-normal">— 실시간 환율로 원화 환산됩니다</span></label>
+        <select id="hf-currency">
+          <option value="KRW" ${(h.currency||'KRW')==='KRW'?'selected':''}>원화 (KRW)</option>
+          <option value="USD" ${h.currency==='USD'?'selected':''}>달러 (USD)</option>
+        </select>
+      </div>
+      ${isNew ? `
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="text-xs text-muted mb-1 block">수량</label><input id="hf-qty" type="number" value="${h.quantity}"></div>
+        <div><label class="text-xs text-muted mb-1 block">평균 매입가</label><input id="hf-avg" type="number" step="0.01" value="${h.avgPrice}" placeholder="선택한 통화 기준"></div>
+      </div>
+      ` : `
+      <div class="row p-3 text-xs text-muted">현재 보유 ${h.quantity}주 · 평단 ${fmtPrice(h.avgPrice,h.currency)}<br>수량·평단 변경은 목록의 '거래하기'를 이용해주세요.</div>
+      `}
+      <div><label class="text-xs text-muted mb-1 block">현재가 (수동 조정, 시세 연동 시 자동 갱신, 선택한 통화 기준)</label><input id="hf-cur" type="number" step="0.01" value="${h.currentPrice}"></div>
+      <div class="border-t border-line pt-3">
+        <p class="text-xs text-muted mb-2">📡 시세 자동 연동 (선택) — 종목코드를 입력하면 하루 1회 자동으로, 또는 수동 새로고침으로 현재가가 업데이트됩니다</p>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="text-xs text-muted mb-1 block">종목코드</label><input id="hf-ticker" type="text" value="${escapeHtml(h.ticker)}" placeholder="예: 005930, AAPL"></div>
+          <div><label class="text-xs text-muted mb-1 block">거래소</label>
+            <select id="hf-exchange">
+              <option value="" ${h.exchange===''?'selected':''}>자동(해외)</option>
+              <option value="KRX" ${h.exchange==='KRX'?'selected':''}>국내(KRX)</option>
+              <option value="NASDAQ" ${h.exchange==='NASDAQ'?'selected':''}>NASDAQ</option>
+              <option value="NYSE" ${h.exchange==='NYSE'?'selected':''}>NYSE</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  `, `
+    <button class="btn-ghost px-4 py-2.5 rounded-xl text-sm" onclick="closeModal()">취소</button>
+    <button id="hf-save" class="btn-brand px-4 py-2.5 rounded-xl text-sm">저장</button>
+  `);
+  document.getElementById('hf-exchange').onchange = (e) => {
+    const v = e.target.value;
+    const curSel = document.getElementById('hf-currency');
+    if (v === 'KRX') curSel.value = 'KRW';
+    else if (v === 'NASDAQ' || v === 'NYSE') curSel.value = 'USD';
+  };
+  document.getElementById('hf-save').onclick = () => {
+    const name = document.getElementById('hf-name').value.trim();
+    const type = document.getElementById('hf-type').value;
+    const currency = document.getElementById('hf-currency').value;
+    const cur = +document.getElementById('hf-cur').value;
+    const ticker = document.getElementById('hf-ticker').value.trim();
+    const exchange = document.getElementById('hf-exchange').value;
+    if (!name || !cur) { toast('필수 항목을 모두 입력해주세요.', 'warn'); return; }
+    if (isNew) {
+      const qty = +document.getElementById('hf-qty').value;
+      const avg = +document.getElementById('hf-avg').value;
+      if (!qty || !avg) { toast('수량과 매입가를 입력해주세요.', 'warn'); return; }
+      const newHolding = { id: uid(), name, type, currency, quantity:qty, avgPrice:avg, currentPrice:cur, ticker, exchange, priceUpdatedAt:null };
+      state.portfolio.push(newHolding);
+      state.transactions.push({ id: uid(), date: todayStr(), holdingId:newHolding.id, name, ticker, type:'buy', currency, quantity:qty, price:avg, avgPriceAtTime:avg, realizedPnL:null });
+      save(LS.transactions, state.transactions);
+    } else {
+      Object.assign(existing, { name, type, currency, currentPrice:cur, ticker, exchange });
+    }
+    save(LS.portfolio, state.portfolio);
+    snapshotToday();
+    closeModal(); renderers.portfolio(); toast('저장되었습니다.', 'success');
+  };
+}
+
+/* ================= PRINCIPLES ================= */
+renderers.principles = function() {
+  const el = document.getElementById('panel-principles');
+  el.innerHTML = `
+    <h2 class="font-bold text-xl mt-2 mb-1">📜 나의 투자원칙</h2>
+    <p class="text-xs text-muted mb-4">포모체크는 여기 등록된 원칙을 기준으로 판단합니다. 한번 세워두면 자주 바꾸지 않아도 괜찮아요.</p>
+
+    <button id="btn-compass" class="card p-4 mb-4 w-full text-left flex items-center justify-between" style="background:linear-gradient(135deg,#1c3a63,#141822)">
+      <div><p class="text-sm font-bold">🧭 투자 나침반</p><p class="text-xs text-muted mt-0.5">아직 원칙이 없다면? 5가지 질문으로 나에게 맞는 원칙을 찾아보세요</p></div>
+      <span class="text-brand text-xl">›</span>
+    </button>
+
+    <div class="flex gap-2 mb-4">
+      <button id="btn-add-template" class="btn-ghost text-xs px-3.5 py-2.5 rounded-xl flex-1 font-semibold">🏛️ 대가 템플릿</button>
+      <button id="btn-add-principle" class="btn-brand text-xs px-3.5 py-2.5 rounded-xl flex-1 font-bold">+ 직접 작성</button>
+    </div>
+    <div id="principle-list" class="space-y-3"></div>
+  `;
+  const list = document.getElementById('principle-list');
+  if (state.principles.length === 0) {
+    list.innerHTML = `<div class="card p-8 text-center text-sm text-muted">아직 등록된 투자 원칙이 없습니다.<br>투자 나침반으로 시작하거나, 직접 작성 · 대가 템플릿을 불러와보세요.</div>`;
+  } else {
+    list.innerHTML = state.principles.map(pr => `
+      <div class="card p-4">
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <p class="font-semibold text-sm">${escapeHtml(pr.title)}</p>
+            <span class="badge bg-brand/15 text-brand mt-1 inline-block">${escapeHtml(pr.source)}</span>
+          </div>
+          <button data-del="${pr.id}" class="text-muted text-sm">삭제</button>
+        </div>
+        <p class="text-sm text-[#c6cbd9] mt-2 whitespace-pre-wrap">${escapeHtml(pr.body)}</p>
+      </div>
+    `).join('');
+    list.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+      state.principles = state.principles.filter(p => p.id !== b.dataset.del);
+      save(LS.principles, state.principles);
+      renderers.principles();
+      toast('원칙을 삭제했습니다.');
+    });
+  }
+  document.getElementById('btn-compass').onclick = openCompassQuiz;
+  document.getElementById('btn-add-principle').onclick = openPrincipleForm;
+  document.getElementById('btn-add-template').onclick = openTemplatePicker;
+};
+
+function openPrincipleForm() {
+  openModal('나만의 원칙 작성', `
+    <div class="space-y-3">
+      <div><label class="text-xs text-muted mb-1 block">제목</label><input id="pf-title" type="text" placeholder="예: 이해 못하는 사업엔 투자하지 않는다"></div>
+      <div><label class="text-xs text-muted mb-1 block">내용</label><textarea id="pf-body" placeholder="구체적인 기준을 적어주세요"></textarea></div>
+    </div>
+  `, `
+    <button class="btn-ghost px-4 py-2.5 rounded-xl text-sm" onclick="closeModal()">취소</button>
+    <button id="pf-save" class="btn-brand px-4 py-2.5 rounded-xl text-sm">저장</button>
+  `);
+  document.getElementById('pf-save').onclick = () => {
+    const title = document.getElementById('pf-title').value.trim();
+    const body = document.getElementById('pf-body').value.trim();
+    if (!title || !body) { toast('제목과 내용을 모두 입력해주세요.', 'warn'); return; }
+    state.principles.push({ id: uid(), title, body, source:'직접작성', createdAt: Date.now() });
+    save(LS.principles, state.principles);
+    closeModal(); renderers.principles(); toast('투자 원칙을 추가했습니다.', 'success');
+  };
+}
+
+function openTemplatePicker() {
+  const bodyHtml = INVESTOR_CATEGORIES.map((cat, ci) => `
+    <div class="mb-5">
+      <p class="text-sm font-bold text-brand">${cat.category}</p>
+      <p class="text-[11px] text-muted mb-2.5">${cat.desc}</p>
+      <div class="space-y-2.5">
+        ${cat.investors.map((t, ii) => `
+          <div class="row p-3.5">
+            <label class="flex items-start gap-2.5 cursor-pointer">
+              <input type="checkbox" class="tpl-check mt-1" data-ci="${ci}" data-ii="${ii}">
+              <div class="flex-1">
+                <p class="font-semibold text-sm">${t.name} <span class="text-[11px] text-muted font-normal">· ${t.role}</span></p>
+                <ul class="text-xs text-[#c6cbd9] mt-1.5 list-disc list-inside space-y-1 tpl-points" data-ci="${ci}" data-ii="${ii}">
+                  ${t.points.slice(0,2).map(p=>`<li>${escapeHtml(p)}</li>`).join('')}
+                </ul>
+                ${t.points.length>2 ? `<button type="button" class="tpl-more text-[11px] text-brand font-semibold mt-1.5" data-ci="${ci}" data-ii="${ii}">+ ${t.points.length-2}개 더보기</button>` : ''}
+              </div>
+            </label>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+
+  openModal('세계적인 투자자의 원칙 불러오기', `<p class="text-xs text-muted mb-3">원하는 항목을 선택하면 내 원칙 목록에 추가됩니다.</p>${bodyHtml}`, `
+    <button class="btn-ghost px-4 py-2.5 rounded-xl text-sm" onclick="closeModal()">취소</button>
+    <button id="tpl-save" class="btn-brand px-4 py-2.5 rounded-xl text-sm">선택 항목 추가</button>
+  `);
+
+  document.querySelectorAll('.tpl-more').forEach(btn => {
+    btn.onclick = () => {
+      const ci = +btn.dataset.ci, ii = +btn.dataset.ii;
+      const t = INVESTOR_CATEGORIES[ci].investors[ii];
+      const ul = document.querySelector(`.tpl-points[data-ci="${ci}"][data-ii="${ii}"]`);
+      ul.innerHTML = t.points.map(p=>`<li>${escapeHtml(p)}</li>`).join('');
+      btn.remove();
+    };
+  });
+
+  document.getElementById('tpl-save').onclick = () => {
+    const checked = [...document.querySelectorAll('.tpl-check:checked')].map(c => INVESTOR_CATEGORIES[+c.dataset.ci].investors[+c.dataset.ii]);
+    if (checked.length === 0) { toast('하나 이상 선택해주세요.', 'warn'); return; }
+    checked.forEach(t => {
+      state.principles.push({ id: uid(), title: `${t.name}의 원칙`, body: t.points.map(p=>'· '+p).join('\n'), source: t.name, createdAt: Date.now() });
+    });
+    save(LS.principles, state.principles);
+    closeModal(); renderers.principles(); toast(`${checked.length}개 템플릿을 추가했습니다.`, 'success');
+  };
+}
+
+/* ================= JOURNAL ================= */
+const MOODS = { confident:'😤 확신', anxious:'😰 불안', neutral:'😐 담담', greedy:'🤑 탐욕', fearful:'😨 공포' };
+let journalHashtagFilter = '';
+let journalSearchQuery = '';
+let journalViewMode = 'diary';
+renderers.journal = function() {
+  const el = document.getElementById('panel-journal');
+  const allTags = [...new Set(state.journal.flatMap(j=>j.hashtags||[]))];
+  el.innerHTML = `
+    <div class="flex items-center justify-between mt-2 mb-3">
+      <h2 class="font-bold text-xl">📓 투자일지</h2>
+      <button id="btn-add-journal" class="btn-brand text-xs px-3.5 py-2.5 rounded-xl font-bold">+ 오늘 기록</button>
+    </div>
+    <div class="seg mb-3" id="jr-seg">
+      <button data-m="diary">📔 일기</button><button data-m="transactions">💱 거래내역</button><button data-m="all">🕒 전체</button>
+    </div>
+    <input id="jr-search" type="text" placeholder="🔍 제목, 내용, 해시태그, 종목명 검색" value="${escapeHtml(journalSearchQuery)}" class="mb-3">
+    ${allTags.length && journalViewMode!=='transactions' ? `<div class="flex gap-1.5 flex-wrap mb-3">
+      <button data-tag="" class="chip ${journalHashtagFilter===''?'active':''}">전체</button>
+      ${allTags.map(t=>`<button data-tag="${escapeHtml(t)}" class="chip ${journalHashtagFilter===t?'active':''}">#${escapeHtml(t)}</button>`).join('')}
+    </div>` : ''}
+    <div id="journal-list" class="space-y-3"></div>
+  `;
+  el.querySelectorAll('#jr-seg button').forEach(b => {
+    if (b.dataset.m === journalViewMode) b.classList.add('active');
+    b.onclick = () => { journalViewMode = b.dataset.m; renderers.journal(); };
+  });
+  el.querySelectorAll('[data-tag]').forEach(b => b.onclick = () => { journalHashtagFilter = b.dataset.tag; renderers.journal(); });
+  document.getElementById('jr-search').oninput = (e) => { journalSearchQuery = e.target.value; renderJournalList(); };
+  document.getElementById('btn-add-journal').onclick = () => openJournalForm(null);
+  renderJournalList();
+};
+
+function renderJournalList() {
+  const list = document.getElementById('journal-list');
+  if (!list) return;
+  const diary = state.journal.map(j => ({ ...j, _kind:'diary' }));
+  const tx = state.transactions.map(t => ({ ...t, _kind:'tx' }));
+  let items;
+  if (journalViewMode === 'diary') items = diary;
+  else if (journalViewMode === 'transactions') items = tx;
+  else items = [...diary, ...tx];
+  items = items.slice().sort((a,b) => a.date===b.date ? 0 : (a.date>b.date?1:-1)).reverse();
+
+  if (journalHashtagFilter) items = items.filter(it => it._kind==='diary' && (it.hashtags||[]).includes(journalHashtagFilter));
+  if (journalSearchQuery.trim()) {
+    const q = journalSearchQuery.trim().toLowerCase();
+    items = items.filter(it => {
+      if (it._kind==='diary') return (it.title||'').toLowerCase().includes(q) || (it.content||'').toLowerCase().includes(q) || (it.hashtags||[]).some(t=>t.toLowerCase().includes(q));
+      return (it.name||'').toLowerCase().includes(q) || (it.ticker||'').toLowerCase().includes(q);
+    });
+  }
+  if (items.length === 0) {
+    list.innerHTML = `<div class="card p-8 text-center text-sm text-muted">${journalHashtagFilter||journalSearchQuery ? '조건에 맞는 기록이 없습니다.' : (journalViewMode==='transactions' ? '아직 매수·매도 기록이 없습니다. 포트폴리오에서 거래하기를 이용해보세요.' : '매일의 투자 심리와 판단을 기록해보세요.<br>과거의 나를 돌아보는 것이 가장 좋은 스승입니다.')}</div>`;
+    return;
+  }
+  list.innerHTML = items.map(it => it._kind==='diary' ? `
+    <div class="card p-4">
+      <div class="flex items-center justify-between mb-1">
+        <p class="text-sm font-semibold">${it.date} (${weekdayKR(it.date)}) ${MOODS[it.mood]||''}</p>
+        <div class="flex gap-2.5">
+          <button data-edit="${it.id}" class="text-brand text-xs font-semibold">수정</button>
+          <button data-del="${it.id}" class="text-muted text-xs">삭제</button>
+        </div>
+      </div>
+      ${it.title ? `<p class="text-sm font-medium text-brand mb-1">${escapeHtml(it.title)}</p>` : ''}
+      <p class="text-sm text-[#c6cbd9] whitespace-pre-wrap">${escapeHtml(it.content)}</p>
+      ${(it.photos&&it.photos.length) ? `<div class="flex gap-2 mt-2.5 overflow-x-auto no-scrollbar">${it.photos.map(p=>`<img src="${p}" class="w-20 h-20 object-cover rounded-lg flex-shrink-0 journal-photo" data-src="${p}">`).join('')}</div>` : ''}
+      ${(it.hashtags&&it.hashtags.length) ? `<div class="flex gap-1.5 flex-wrap mt-2.5">${it.hashtags.map(t=>`<span class="chip">#${escapeHtml(t)}</span>`).join('')}</div>` : ''}
+    </div>
+  ` : `
+    <div class="card p-4">
+      <div class="flex items-center justify-between mb-1">
+        <p class="text-sm font-semibold">${it.date} (${weekdayKR(it.date)})</p>
+        <span class="badge ${it.type==='buy'?'bg-brand/15 text-brand':'bg-bad/15 text-bad'}">${it.type==='buy'?'매수':'매도'}</span>
+      </div>
+      <p class="text-sm font-medium">${escapeHtml(it.name)}</p>
+      <p class="text-xs text-muted mt-1">${it.quantity}주 · ${fmtPrice(it.price, it.currency)}</p>
+      ${it.type==='sell' ? `<p class="text-xs font-semibold mt-1.5 ${it.realizedPnL>=0?'text-up':'text-down'}">실현손익 ${it.realizedPnL>=0?'+':''}${fmtPrice(it.realizedPnL, it.currency)} (${fmtPct(it.avgPriceAtTime>0?(it.price-it.avgPriceAtTime)/it.avgPriceAtTime*100:0)})</p>` : ''}
+    </div>
+  `).join('');
+  list.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => openJournalForm(state.journal.find(j=>j.id===b.dataset.edit)));
+  list.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+    state.journal = state.journal.filter(j=>j.id!==b.dataset.del);
+    save(LS.journal, state.journal); renderJournalList(); toast('일지를 삭제했습니다.');
+  });
+  list.querySelectorAll('.journal-photo').forEach(img => img.onclick = () => {
+    openModal('사진', `<img src="${img.dataset.src}" class="w-full rounded-xl">`, `<button class="btn-brand px-4 py-2.5 rounded-xl text-sm w-full" onclick="closeModal()">닫기</button>`);
+  });
+}
+
+function compressImage(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const maxW = 640;
+        const scale = Math.min(1, maxW / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.65));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function openJournalForm(existing) {
+  let pendingPhotos = existing ? (existing.photos||[]).slice() : [];
+  function renderPhotoPreview() {
+    document.getElementById('jf-photo-preview').innerHTML = pendingPhotos.map((p,i)=>`
+      <div class="relative">
+        <img src="${p}" class="w-16 h-16 object-cover rounded-lg">
+        <button data-rmphoto="${i}" class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-bad rounded-full text-white text-xs flex items-center justify-center">✕</button>
+      </div>
+    `).join('');
+    document.querySelectorAll('[data-rmphoto]').forEach(b => b.onclick = () => { pendingPhotos.splice(+b.dataset.rmphoto,1); renderPhotoPreview(); });
+  }
+  openModal(existing ? '투자일지 수정' : '투자일지 작성', `
+    <div class="space-y-3">
+      <div><label class="text-xs text-muted mb-1 block">날짜</label><input id="jf-date" type="date" value="${existing?existing.date:todayStr()}"></div>
+      <div><label class="text-xs text-muted mb-1 block">오늘의 심리</label>
+        <select id="jf-mood">${Object.entries(MOODS).map(([k,v])=>`<option value="${k}" ${existing&&existing.mood===k?'selected':''}>${v}</option>`).join('')}</select>
+      </div>
+      <div><label class="text-xs text-muted mb-1 block">제목 (선택)</label><input id="jf-title" type="text" value="${existing?escapeHtml(existing.title||''):''}" placeholder="예: 급락장에서 흔들렸던 하루"></div>
+      <div><label class="text-xs text-muted mb-1 block">내용</label><textarea id="jf-content" placeholder="오늘 어떤 판단을 했고, 왜 그랬는지 적어보세요">${existing?escapeHtml(existing.content||''):''}</textarea></div>
+      <div>
+        <label class="text-xs text-muted mb-1 block">사진 첨부 (선택)</label>
+        <input id="jf-photo" type="file" accept="image/*" multiple class="text-xs">
+        <div id="jf-photo-preview" class="flex gap-2 mt-2 flex-wrap"></div>
+      </div>
+      <div><label class="text-xs text-muted mb-1 block">해시태그 (쉼표로 구분, 선택)</label><input id="jf-tags" type="text" value="${existing?escapeHtml((existing.hashtags||[]).join(', ')):''}" placeholder="예: 삼성전자, 매수고민, 급등"></div>
+    </div>
+  `, `
+    <button class="btn-ghost px-4 py-2.5 rounded-xl text-sm" onclick="closeModal()">취소</button>
+    <button id="jf-save" class="btn-brand px-4 py-2.5 rounded-xl text-sm">저장</button>
+  `);
+  renderPhotoPreview();
+
+  document.getElementById('jf-photo').onchange = async (e) => {
+    const files = [...e.target.files];
+    for (const f of files) { pendingPhotos.push(await compressImage(f)); }
+    renderPhotoPreview();
+  };
+
+  document.getElementById('jf-save').onclick = () => {
+    const date = document.getElementById('jf-date').value || todayStr();
+    const mood = document.getElementById('jf-mood').value;
+    const title = document.getElementById('jf-title').value.trim();
+    const content = document.getElementById('jf-content').value.trim();
+    const hashtags = document.getElementById('jf-tags').value.split(',').map(t=>t.trim().replace(/^#/,'')).filter(Boolean);
+    if (!content) { toast('내용을 입력해주세요.', 'warn'); return; }
+    if (existing) {
+      Object.assign(existing, { date, mood, title, content, photos: pendingPhotos, hashtags });
+    } else {
+      state.journal.push({ id: uid(), date, mood, title, content, photos: pendingPhotos, hashtags });
+    }
+    state.journal.sort((a,b)=>a.date.localeCompare(b.date));
+    save(LS.journal, state.journal);
+    closeModal(); renderers.journal(); toast(existing ? '일지를 수정했습니다.' : '일지를 저장했습니다.', 'success');
+  };
+}
+
+/* ================= SETTINGS ================= */
+renderers.settings = function() {
+  const el = document.getElementById('panel-settings');
+  const provider = state.settings.provider;
+  const pmeta = AI_PROVIDERS[provider];
+  const modelOptions = (modelListCache[provider] && modelListCache[provider].length) ? modelListCache[provider] : pmeta.modelSuggestions;
+  const currentModel = (state.settings.models||{})[provider] || pmeta.defaultModel;
+  el.innerHTML = `
+    <h2 class="font-bold text-xl mt-2 mb-4">⚙️ 설정</h2>
+
+    <div class="card p-4 mb-4">
+      <p class="text-sm font-semibold mb-1">👤 계정 · 클라우드 동기화</p>
+      ${isSupabaseConfigured() ? `
+        <p class="text-xs text-muted mb-3">로그인하면 원칙·포트폴리오·거래내역·일지가 클라우드에 자동 저장돼요. 쿠키를 지우거나 기기를 바꿔도 로그인만 하면 그대로 돌아옵니다.</p>
+        ${state.profile ? `
+          <div class="row p-3 flex items-center gap-3 mb-1">
+            ${state.profile.picture ? `<img src="${state.profile.picture}" class="w-10 h-10 rounded-full">` : `<div class="w-10 h-10 rounded-full bg-brand flex items-center justify-center text-lg">👤</div>`}
+            <div class="flex-1"><p class="text-sm font-semibold">${escapeHtml(state.profile.name)}</p><p class="text-[11px] text-good">☁️ 클라우드 동기화 중 · ${localStorage.getItem('fomoguard_last_cloud_sync') ? '마지막 저장 '+timeAgo(+localStorage.getItem('fomoguard_last_cloud_sync')) : '동기화 대기'}</p></div>
+            <button id="btn-logout" class="btn-ghost text-xs px-3 py-2 rounded-lg">로그아웃</button>
+          </div>
+        ` : `
+          <div id="google-login-btn" class="flex justify-center mb-1"></div>
+          <p class="text-[10px] text-muted text-center mt-2">로그인은 선택이에요. 안 해도 모든 기능을 그대로 쓸 수 있고, 이 경우 데이터는 이 브라우저에만 저장됩니다.</p>
+        `}
+      ` : `
+        <p class="text-xs text-muted mb-1">로그인은 선택이에요. 안 해도 모든 기능을 그대로 쓸 수 있고, 데이터는 이 브라우저에만 저장됩니다.</p>
+        <p class="text-xs text-warn">⚠️ 클라우드 동기화가 아직 설정되지 않았어요. (코드 상단 SUPABASE_URL/ANON_KEY 등록 필요 — 설정 가이드 참고)</p>
+      `}
+    </div>
+
+    <div class="card p-4 mb-4">
+      <p class="text-sm font-semibold mb-1">🤖 AI 연동</p>
+      <p class="text-xs text-muted mb-3">API 키를 붙여넣으면 어떤 AI인지 자동으로 인식하고, 사용 가능한 모델 목록을 불러옵니다. 키는 이 브라우저에만 저장됩니다.</p>
+      <div class="grid grid-cols-4 gap-1.5 mb-3" id="st-provider-grid">
+        ${Object.entries(AI_PROVIDERS).map(([key,p]) => `<button data-provider="${key}" class="row py-2 text-center text-[11px] font-semibold ${provider===key?'ring-2 ring-brand text-brand':'text-[#c6cbd9]'}">${p.label}</button>`).join('')}
+      </div>
+      <label class="text-xs text-muted mb-1 block">${pmeta.label} API 키</label>
+      <div class="flex gap-2 mb-3">
+        <input id="st-apikey" type="password" placeholder="${pmeta.keyPlaceholder}" value="${escapeHtml((state.settings.apiKeys||{})[provider]||'')}">
+        <button id="st-toggle-key" class="btn-ghost px-3 rounded-xl text-xs whitespace-nowrap">보기</button>
+      </div>
+      <label class="text-xs text-muted mb-1 block">모델</label>
+      <div class="flex gap-2">
+        <select id="st-model" class="flex-1">
+          ${modelOptions.map(m=>`<option value="${escapeHtml(m)}" ${m===currentModel?'selected':''}>${escapeHtml(m)}</option>`).join('')}
+        </select>
+        <button id="st-fetch-models" class="btn-ghost px-3 rounded-xl text-xs whitespace-nowrap">🔄 모델 불러오기</button>
+      </div>
+      <p id="st-model-status" class="text-[10px] text-muted mt-1.5"></p>
+    </div>
+
+    <div class="card p-4 mb-4">
+      <p class="text-sm font-semibold mb-1">📡 시세 · 환율 · 지수 연동</p>
+      <p class="text-xs text-muted mb-3">Twelve Data의 무료 API 키를 등록하면, 앱을 열 때마다 하루 1회 자동으로 + 언제든 수동으로 보유 종목의 시세, 원/달러 환율, 코스피·S&amp;P500·나스닥 등락률을 갱신합니다. 키가 없어도 환율만은 별도 무료 서비스로 갱신됩니다. twelvedata.com에서 무료로 발급받을 수 있어요.</p>
+      <label class="text-xs text-muted mb-1 block">Twelve Data API 키</label>
+      <input id="st-twelvekey" type="password" placeholder="발급받은 키 입력" value="${escapeHtml(state.settings.twelveDataKey)}">
+    </div>
+
+    <div class="card p-4 mb-4">
+      <p class="text-sm font-semibold mb-1">📰 뉴스 연동</p>
+      <p class="text-xs text-muted mb-3">더보기 → 실시간 뉴스 탭에서 관심 키워드별 최신 헤드라인·요약을 보려면 GNews의 무료 API 키가 필요합니다. 하루 1회 자동 + 수동 새로고침으로 최근 3일 이내 뉴스만 갱신해드려요. gnews.io에서 무료로 발급받을 수 있어요.</p>
+      <label class="text-xs text-muted mb-1 block">GNews API 키</label>
+      <input id="st-newskey" type="password" placeholder="발급받은 키 입력" value="${escapeHtml(state.settings.newsApiKey)}">
+    </div>
+
+    <button id="st-save" class="btn-brand w-full py-3.5 rounded-xl text-sm font-bold mb-4">설정 저장</button>
+
+    <div class="card p-4 mb-4">
+      <p class="text-sm font-semibold mb-1">💾 데이터 백업 / 복원</p>
+      <p class="text-xs text-muted mb-3">모든 데이터(원칙, 포트폴리오, 거래내역, 일지, API키 제외)를 JSON 파일로 내보내거나 불러올 수 있습니다.</p>
+      <div class="flex gap-2">
+        <button id="st-export" class="btn-ghost text-xs px-3 py-2.5 rounded-xl flex-1">⬇️ 내보내기</button>
+        <label class="btn-ghost text-xs px-3 py-2.5 rounded-xl flex-1 text-center cursor-pointer">⬆️ 불러오기<input id="st-import" type="file" accept="application/json" class="hidden"></label>
+      </div>
+    </div>
+
+    <button id="btn-goto-taborder" class="card p-4 mb-4 w-full text-left flex items-center justify-between">
+      <div><p class="text-sm font-semibold">🔀 탭 순서 편집</p><p class="text-xs text-muted mt-0.5">포모체크는 항상 하단 중앙에 고정되고, 나머지 탭 순서를 바꿀 수 있어요</p></div>
+      <span class="text-muted">›</span>
+    </button>
+
+    <div class="card p-4 border border-bad/30">
+      <p class="text-sm font-semibold text-bad mb-1">⚠️ 데이터 초기화</p>
+      <p class="text-xs text-muted mb-3">모든 원칙/포트폴리오/거래내역/일지/기록이 영구히 삭제됩니다.</p>
+      <button id="st-reset" class="btn-ghost text-xs px-3 py-2.5 rounded-xl w-full">전체 초기화</button>
+    </div>
+  `;
+
+  if (state.profile) {
+    document.getElementById('btn-logout').onclick = logout;
+  } else if (isSupabaseConfigured()) {
+    renderGoogleButton('google-login-btn');
+  }
+
+  document.querySelectorAll('#st-provider-grid [data-provider]').forEach(b => b.onclick = () => { state.settings.provider = b.dataset.provider; renderers.settings(); });
+  document.getElementById('st-toggle-key').onclick = () => {
+    const inp = document.getElementById('st-apikey');
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+  };
+
+  async function loadModelsIntoDropdown() {
+    const p = state.settings.provider;
+    const key = document.getElementById('st-apikey').value.trim();
+    const statusEl = document.getElementById('st-model-status');
+    const sel = document.getElementById('st-model');
+    if (!key) { statusEl.textContent = ''; return; }
+    statusEl.textContent = '모델 목록을 불러오는 중...';
+    const models = await fetchModelList(p, key);
+    if (models && models.length) {
+      modelListCache[p] = models;
+      sel.innerHTML = models.map(m=>`<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+      const preferred = (state.settings.models||{})[p];
+      if (preferred && models.includes(preferred)) sel.value = preferred;
+      statusEl.innerHTML = `<span class="text-good">✓ ${models.length}개 모델을 불러왔습니다.</span>`;
+    } else {
+      statusEl.innerHTML = `<span class="text-warn">모델 목록을 불러오지 못했습니다. 키를 확인하거나 기본 목록에서 선택하세요.</span>`;
+    }
+  }
+  async function handleApiKeyAutoDetect() {
+    const inp = document.getElementById('st-apikey');
+    const key = inp.value.trim();
+    if (!key) return;
+    const detected = detectProviderFromKey(key);
+    if (detected && detected !== state.settings.provider) {
+      state.settings.provider = detected;
+      document.querySelectorAll('#st-provider-grid [data-provider]').forEach(b => {
+        const active = b.dataset.provider === detected;
+        b.classList.toggle('ring-2', active); b.classList.toggle('ring-brand', active); b.classList.toggle('text-brand', active); b.classList.toggle('text-[#c6cbd9]', !active);
+      });
+      el.querySelector('label.text-xs.text-muted.mb-1.block').textContent = `${AI_PROVIDERS[detected].label} API 키`;
+      document.getElementById('st-apikey').placeholder = AI_PROVIDERS[detected].keyPlaceholder;
+      document.getElementById('st-model-status').innerHTML = `<span class="text-brand">${AI_PROVIDERS[detected].label} 키로 인식되었습니다.</span>`;
+    }
+    await loadModelsIntoDropdown();
+  }
+  document.getElementById('st-apikey').addEventListener('blur', handleApiKeyAutoDetect);
+  document.getElementById('st-fetch-models').onclick = loadModelsIntoDropdown;
+
+  document.getElementById('st-save').onclick = () => {
+    const p = state.settings.provider;
+    state.settings.apiKeys[p] = document.getElementById('st-apikey').value.trim();
+    state.settings.models[p] = document.getElementById('st-model').value;
+    state.settings.twelveDataKey = document.getElementById('st-twelvekey').value.trim();
+    state.settings.newsApiKey = document.getElementById('st-newskey').value.trim();
+    save(LS.settings, state.settings);
+    toast('설정을 저장했습니다.', 'success');
+  };
+  document.getElementById('btn-goto-taborder').onclick = () => switchTab('taborder');
+  document.getElementById('st-export').onclick = () => {
+    const payload = { principles: state.principles, portfolio: state.portfolio, journal: state.journal, transactions: state.transactions, factchecks: state.factchecks, snapshots: state.snapshots, newsKeywords: state.newsKeywords, exportedAt: new Date().toISOString() };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `fomoguard-backup-${todayStr()}.json`;
+    a.click();
+    toast('백업 파일을 생성했습니다.', 'success');
+  };
+  document.getElementById('st-import').onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        if (data.principles) { state.principles = data.principles; save(LS.principles, state.principles); }
+        if (data.portfolio) { state.portfolio = data.portfolio; save(LS.portfolio, state.portfolio); }
+        if (data.journal) { state.journal = data.journal; save(LS.journal, state.journal); }
+        if (data.transactions) { state.transactions = data.transactions; save(LS.transactions, state.transactions); }
+        if (data.factchecks) { state.factchecks = data.factchecks; save(LS.factchecks, state.factchecks); }
+        if (data.snapshots) { state.snapshots = data.snapshots; save(LS.snapshots, state.snapshots); }
+        if (data.newsKeywords) { state.newsKeywords = data.newsKeywords; save(LS.newsKeywords, state.newsKeywords); }
+        toast('데이터를 복원했습니다.', 'success');
+        switchTab('dashboard');
+      } catch (err) { toast('파일을 읽을 수 없습니다.', 'error'); }
+    };
+    reader.readAsText(file);
+  };
+  document.getElementById('st-reset').onclick = () => {
+    confirmModal('정말 초기화할까요?', '이 작업은 되돌릴 수 없습니다. 초기화 전 백업을 권장합니다.', () => {
+      Object.values(LS).forEach(k => k !== LS.settings && localStorage.removeItem(k));
+      localStorage.removeItem('fomoguard_last_sync_date');
+      state.principles = []; state.portfolio = []; state.journal = []; state.transactions = []; state.factchecks = []; state.snapshots = [];
+      state.fx = { rate:null, updatedAt:null }; state.marketSnapshot = null; state.dailyAnalysis = null; state.newsKeywords = []; state.newsCache = {}; state.profile = null;
+      renderHeaderProfile();
+      switchTab('dashboard'); toast('모든 데이터를 초기화했습니다.');
+    }, '초기화');
+  };
+};
+
+/* ================= MORE ================= */
+renderers.more = function() {
+  const el = document.getElementById('panel-more');
+  const overflow = overflowTabs();
+  el.innerHTML = `
+    <h2 class="font-bold text-xl mt-2 mb-4">더보기</h2>
+    <div class="space-y-2.5 mb-4">
+      ${overflow.map(t => `
+        <button data-goto="${t}" class="card p-4 w-full text-left flex items-center justify-between">
+          <div class="flex items-center gap-3"><span class="text-xl">${TAB_META[t].icon}</span><span class="text-sm font-semibold">${TAB_META[t].label}</span></div>
+          <span class="text-muted">›</span>
+        </button>
+      `).join('')}
+    </div>
+    <button id="more-taborder" class="card p-4 w-full text-left flex items-center justify-between mb-2.5">
+      <div class="flex items-center gap-3"><span class="text-xl">🔀</span><span class="text-sm font-semibold">탭 순서 편집</span></div>
+      <span class="text-muted">›</span>
+    </button>
+    <p class="text-center text-[11px] text-muted mt-6">포모가드 · 나만의 투자 집사</p>
+  `;
+  el.querySelectorAll('[data-goto]').forEach(b => b.onclick = () => switchTab(b.dataset.goto));
+  document.getElementById('more-taborder').onclick = () => switchTab('taborder');
+};
+
+/* ================= TAB ORDER EDITOR ================= */
+renderers.taborder = function() {
+  const el = document.getElementById('panel-taborder');
+  const order = state.settings.tabOrder;
+  el.innerHTML = `
+    <h2 class="font-bold text-xl mt-2 mb-1">🔀 탭 순서 편집</h2>
+    <p class="text-xs text-muted mb-4">🧊 포모체크는 항상 하단 메뉴 정중앙에 고정됩니다. 아래 목록 중 위 3개가 나머지 하단 메뉴 자리에 표시돼요.</p>
+    <div id="order-list" class="space-y-2"></div>
+  `;
+  function renderList() {
+    document.getElementById('order-list').innerHTML = order.map((t,i) => `
+      <div class="row p-3.5 flex items-center justify-between ${i<3?'':'opacity-60'}">
+        <div class="flex items-center gap-3">
+          <span class="text-[10px] font-bold w-5 text-center ${i<3?'text-brand':'text-muted'}">${i+1}</span>
+          <span class="text-lg">${TAB_META[t].icon}</span>
+          <span class="text-sm font-semibold">${TAB_META[t].label}</span>
+          ${i<3?'<span class="badge bg-brand/15 text-brand">하단 메뉴</span>':''}
+        </div>
+        <div class="flex gap-1">
+          <button data-up="${i}" class="btn-ghost w-8 h-8 rounded-lg text-sm" ${i===0?'disabled style="opacity:.3"':''}>↑</button>
+          <button data-down="${i}" class="btn-ghost w-8 h-8 rounded-lg text-sm" ${i===order.length-1?'disabled style="opacity:.3"':''}>↓</button>
+        </div>
+      </div>
+    `).join('');
+    document.querySelectorAll('[data-up]').forEach(b => b.onclick = () => {
+      const i = +b.dataset.up; if (i===0) return;
+      [order[i-1], order[i]] = [order[i], order[i-1]];
+      state.settings.tabOrder = order; save(LS.settings, state.settings);
+      renderList(); renderBottomNav();
+    });
+    document.querySelectorAll('[data-down]').forEach(b => b.onclick = () => {
+      const i = +b.dataset.down; if (i===order.length-1) return;
+      [order[i+1], order[i]] = [order[i], order[i+1]];
+      state.settings.tabOrder = order; save(LS.settings, state.settings);
+      renderList(); renderBottomNav();
+    });
+  }
+  renderList();
+};
+
+/* ---------------- init ---------------- */
+async function init() {
+  snapshotToday();
+  renderHeaderProfile();
+  await initSupabaseAuth();
+  if (!state.profile && !localStorage.getItem('fomoguard_onboarded')) {
+    showWelcomeOverlay();
+  }
+  if (localStorage.getItem('fomoguard_last_sync_date') !== todayStr()) {
+    await refreshMarketData(false);
+  }
+  switchTab('dashboard');
+}
+init();
+</script>
+</body>
+</html>
