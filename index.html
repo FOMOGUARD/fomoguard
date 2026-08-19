@@ -217,12 +217,34 @@ let state = {
   if (state.settings.newsApiKey === undefined) state.settings.newsApiKey = state.settings.marketauxKey || '';
 })();
 function hasApiKey() { return !!(state.settings.apiKeys||{})[state.settings.provider]; }
+function canUseAI() { return hasApiKey() || !!currentUser; }
+
+const FREE_AI_DAILY_CAP = 3;
+async function callFreeAI({ system, user, maxTokens=1024 }) {
+  if (!supabaseClient || !currentUser) throw new Error('무료 AI를 쓰려면 먼저 Google 로그인을 해주세요. (또는 설정에서 본인 API 키를 등록하면 로그인 없이도 무제한으로 이용 가능해요)');
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  const token = session?.access_token;
+  if (!token) throw new Error('로그인 세션이 만료되었어요. 다시 로그인해주세요.');
+  let res;
+  try {
+    res = await fetch('/.netlify/functions/ai-free', {
+      method: 'POST',
+      headers: { 'content-type':'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ system, user, maxTokens })
+    });
+  } catch (e) {
+    throw new Error('무료 AI 서버에 연결하지 못했습니다. 잠시 후 다시 시도하거나, 설정에서 본인 API 키를 등록해보세요.');
+  }
+  const data = await res.json().catch(()=>({}));
+  if (!res.ok) throw new Error(data.error || `무료 AI 오류 (${res.status})`);
+  return data.text || '';
+}
 
 async function callAI({ system, user, maxTokens=1024 }) {
+  if (!hasApiKey()) return callFreeAI({ system, user, maxTokens });
   const provider = state.settings.provider || 'claude';
   const apiKey = (state.settings.apiKeys||{})[provider];
   const model = (state.settings.models||{})[provider] || AI_PROVIDERS[provider].defaultModel;
-  if (!apiKey) throw new Error('API 키가 등록되어 있지 않습니다.');
 
   if (provider === 'claude') {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -968,14 +990,14 @@ async function refreshMarketData(showToast) {
     else toast(`갱신 완료 (시세 성공 ${priceResult.ok} · 실패 ${priceResult.fail})`, priceResult.fail?'warn':'success');
   }
   if (renderers[currentTab]) renderers[currentTab]();
-  if (hasApiKey() && (!state.dailyAnalysis || state.dailyAnalysis.date !== todayStr())) {
+  if (canUseAI() && (!state.dailyAnalysis || state.dailyAnalysis.date !== todayStr())) {
     await generateDailyAnalysis(true);
   }
 }
 
 /* ================= AI 데일리 분석 ================= */
 async function generateDailyAnalysis(silent) {
-  if (!hasApiKey()) { if (!silent) { toast('설정에서 API 키를 먼저 등록해주세요.', 'error'); switchTab('settings'); } return; }
+  if (!canUseAI()) { if (!silent) { toast('무료 AI를 쓰려면 Google 로그인을 해주세요. (또는 설정에서 본인 API 키 등록)', 'error'); switchTab('settings'); } return; }
   const box = document.getElementById('daily-analysis-text');
   if (box) box.innerHTML = `<span class="inline-block spin">⏳</span> 분석 생성 중...`;
   const principlesText = state.principles.length ? state.principles.map(p=>`- [${p.source}] ${p.title}`).join('\n') : '(등록된 원칙 없음)';
@@ -1370,7 +1392,7 @@ renderers.factcheck = function() {
       </div>
       <button id="fc-run" class="btn-brand w-full py-3.5 rounded-xl text-sm font-bold">냉철하게 검증받기</button>
       ${state.principles.length===0 ? '<p class="text-xs text-warn">⚠️ 등록된 투자원칙이 없어요. 더보기 → 투자원칙에서 먼저 등록하면 더 정확해집니다.</p>' : ''}
-      ${!hasApiKey() ? '<p class="text-xs text-warn">⚠️ 더보기 → 설정에서 API 키를 먼저 등록해야 실제 AI 검증이 가능합니다.</p>' : ''}
+      ${!canUseAI() ? '<p class="text-xs text-warn">⚠️ Google 로그인을 하면 하루 3회 무료로 AI 검증을 받을 수 있어요. (더보기 → 설정에서 본인 API 키를 등록하면 무제한)</p>' : (!hasApiKey() ? '<p class="text-xs text-muted">무료 AI로 검증합니다 (하루 3회). 더 빠르고 무제한으로 쓰려면 설정에서 본인 API 키를 등록하세요.</p>' : '')}
     </div>
 
     <div id="fc-result"></div>
@@ -1404,7 +1426,7 @@ async function runFactCheck() {
   const amount = document.getElementById('fc-amount').value.trim();
   const reason = document.getElementById('fc-reason').value.trim();
   if (!ticker || !reason) { toast('종목명과 이유는 필수입니다.', 'warn'); return; }
-  if (!hasApiKey()) { toast('설정에서 API 키를 먼저 등록해주세요.', 'error'); switchTab('settings'); return; }
+  if (!canUseAI()) { toast('무료 AI를 쓰려면 Google 로그인을 해주세요. (또는 설정에서 본인 API 키 등록)', 'error'); switchTab('settings'); return; }
 
   const resultBox = document.getElementById('fc-result');
   resultBox.innerHTML = `<div class="card p-6 text-center text-sm text-muted"><span class="inline-block spin">⏳</span> AI가 원칙을 대조하는 중...</div>`;
@@ -1997,7 +2019,7 @@ renderers.settings = function() {
 
     <div class="card p-4 mb-4">
       <p class="text-sm font-semibold mb-1">🤖 AI 연동</p>
-      <p class="text-xs text-muted mb-3">API 키를 붙여넣으면 어떤 AI인지 자동으로 인식하고, 사용 가능한 모델 목록을 불러옵니다. 키는 이 브라우저에만 저장됩니다.</p>
+      <p class="text-xs text-muted mb-3">${currentUser ? '로그인 상태라 API 키 없이도 하루 3회 무료로 AI 기능을 쓸 수 있어요. ' : ''}API 키를 등록하면 무제한·더 빠르게 이용할 수 있어요. 붙여넣으면 어떤 AI인지 자동으로 인식하고, 사용 가능한 모델 목록을 불러옵니다. 키는 이 브라우저에만 저장됩니다.</p>
       <div class="grid grid-cols-4 gap-1.5 mb-3" id="st-provider-grid">
         ${Object.entries(AI_PROVIDERS).map(([key,p]) => `<button data-provider="${key}" class="row py-2 text-center text-[11px] font-semibold ${provider===key?'ring-2 ring-brand text-brand':'text-[#c6cbd9]'}">${p.label}</button>`).join('')}
       </div>
