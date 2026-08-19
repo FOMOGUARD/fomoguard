@@ -55,7 +55,7 @@ exports.handler = async (event) => {
         body: JSON.stringify({
           system_instruction: { parts: [{ text: system || '' }] },
           contents: [{ role: 'user', parts: [{ text: user }] }],
-          generationConfig: { maxOutputTokens: maxTokens || 1024 }
+          generationConfig: { maxOutputTokens: maxTokens || 1024, thinkingConfig: { thinkingBudget: 0 } }
         })
       }
     );
