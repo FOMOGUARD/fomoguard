@@ -44,8 +44,9 @@ tailwind.config = {
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   .app-shell { max-width: 480px; margin: 0 auto; min-height: 100vh; background: #0b0e14; position: relative; }
   @media (min-width: 481px) { .app-shell { box-shadow: 0 0 0 1px #181c26, 0 30px 80px -20px rgba(0,0,0,0.7); min-height: 100vh; } }
-  .card { background: #141822; border-radius: 20px; }
-  .row { background: #141822; border-radius: 16px; }
+  .card { background: #141822; border-radius: 26px; }
+  .row { background: #141822; border-radius: 20px; }
+  .hero-card { background: radial-gradient(120% 140% at 15% 0%, rgba(49,130,246,0.24), rgba(49,130,246,0) 60%), #141822; }
   .fade-in { animation: fadeIn .22s ease both; }
   @keyframes fadeIn { from { opacity:0; transform: translateY(6px);} to { opacity:1; transform:none; } }
   .spin { animation: spin 1s linear infinite; }
@@ -63,6 +64,8 @@ tailwind.config = {
   .modal-backdrop { background: rgba(2,4,8,0.75); backdrop-filter: blur(2px); }
   .bottom-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; z-index: 30; }
   .navbtn.active { color: #3182f6; }
+  .navbtn.active .nav-pill { background: rgba(49,130,246,0.15); }
+  .nav-pill { border-radius: 999px; padding: 3px 14px; transition: background .15s; }
   .navbtn { color: #6b7280; }
   .navbtn-center-wrap { position: relative; }
   .navbtn-center { position: absolute; left: 50%; top: -20px; transform: translateX(-50%); width: 54px; height: 54px; border-radius: 9999px; background: #3182f6; display:flex; align-items:center; justify-content:center; font-size: 24px; box-shadow: 0 10px 22px -6px rgba(49,130,246,0.65); border: 4px solid #05070c; }
@@ -381,14 +384,18 @@ document.getElementById('welcome-skip').addEventListener('click', hideWelcomeOve
 
 /* ---------------- nav / tabs / back history ---------------- */
 const TAB_META = {
-  dashboard: { label:'대시보드', icon:'📊' },
-  factcheck: { label:'포모체크', icon:'🧊' },
-  portfolio: { label:'포트폴리오', icon:'💼' },
-  journal: { label:'투자일지', icon:'📓' },
-  principles: { label:'투자원칙', icon:'📜' },
-  settings: { label:'설정', icon:'⚙️' },
-  news: { label:'실시간 뉴스', icon:'📰' }
+  dashboard: { label:'대시보드', icon:'📊', color:'#3182f6' },
+  factcheck: { label:'포모체크', icon:'🧊', color:'#3182f6' },
+  portfolio: { label:'포트폴리오', icon:'💼', color:'#f59e0b' },
+  journal: { label:'투자일지', icon:'📓', color:'#ec4899' },
+  principles: { label:'투자원칙', icon:'📜', color:'#8b5cf6' },
+  settings: { label:'설정', icon:'⚙️', color:'#64748b' },
+  news: { label:'실시간 뉴스', icon:'📰', color:'#14b8a6' }
 };
+function iconBadge(emoji, color, size) {
+  size = size || 40;
+  return `<div class="rounded-full flex items-center justify-center flex-shrink-0" style="width:${size}px;height:${size}px;background:${color};font-size:${Math.round(size*0.48)}px;line-height:1">${emoji}</div>`;
+}
 const renderers = {};
 let currentTab = 'dashboard';
 let navHistory = [];
@@ -401,9 +408,11 @@ function renderBottomNav() {
   const flank = visibleFlank();
   const isMainVisible = flank.includes(currentTab) || currentTab === CENTER_TAB;
   function normalBtn(t) {
-    return `<button data-tab="${t}" class="navbtn flex-1 flex flex-col items-center gap-0.5 py-1.5 ${currentTab===t?'active':''}">
-      <span class="text-xl leading-none">${TAB_META[t].icon}</span>
-      <span class="text-[10px] font-semibold">${TAB_META[t].label}</span>
+    return `<button data-tab="${t}" class="navbtn flex-1 flex flex-col items-center gap-0.5 py-1 ${currentTab===t?'active':''}">
+      <span class="nav-pill flex flex-col items-center gap-0.5 py-1">
+        <span class="text-xl leading-none">${TAB_META[t].icon}</span>
+        <span class="text-[10px] font-semibold">${TAB_META[t].label}</span>
+      </span>
     </button>`;
   }
   const centerActive = currentTab === CENTER_TAB;
@@ -1178,7 +1187,7 @@ renderers.dashboard = function() {
   const q = quoteOfTheDay();
 
   el.innerHTML = `
-    <div class="card p-5 mt-2 mb-3">
+    <div class="hero-card rounded-[26px] p-5 mt-2 mb-3">
       <p class="text-xs text-muted mb-1.5">총 평가 자산 (원화 기준)</p>
       <p class="text-[32px] font-extrabold leading-tight tracking-tight">${fmtWon(totalValue)}</p>
       ${hasData ? `<div class="flex items-center gap-1.5 mt-1.5">
@@ -1250,17 +1259,23 @@ renderers.dashboard = function() {
     </div>
     ` : ''}
 
-    <button data-goto="factcheck" class="card p-4 mb-3 w-full text-left flex items-center justify-between">
-      <div>
-        <p class="text-sm font-semibold">🧊 최근 포모체크</p>
-        <p class="text-xs text-muted mt-0.5">${lastFc ? `${escapeHtml(lastFc.ticker)} · ${escapeHtml(lastFc.result?.verdict||'')}` : '지금 하려는 투자를 검증해보세요'}</p>
+    <button data-goto="factcheck" class="card p-3.5 mb-3 w-full text-left flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        ${iconBadge('🧊', TAB_META.factcheck.color)}
+        <div>
+          <p class="text-sm font-semibold">최근 포모체크</p>
+          <p class="text-xs text-muted mt-0.5">${lastFc ? `${escapeHtml(lastFc.ticker)} · ${escapeHtml(lastFc.result?.verdict||'')}` : '지금 하려는 투자를 검증해보세요'}</p>
+        </div>
       </div>
       <span class="text-muted">›</span>
     </button>
-    <button data-goto="journal" class="card p-4 mb-3 w-full text-left flex items-center justify-between">
-      <div>
-        <p class="text-sm font-semibold">📓 오늘의 투자일지</p>
-        <p class="text-xs text-muted mt-0.5">${todayJournal ? '오늘 기록을 이미 작성했어요' : '오늘의 판단과 심리를 기록해보세요'}</p>
+    <button data-goto="journal" class="card p-3.5 mb-3 w-full text-left flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        ${iconBadge('📓', TAB_META.journal.color)}
+        <div>
+          <p class="text-sm font-semibold">오늘의 투자일지</p>
+          <p class="text-xs text-muted mt-0.5">${todayJournal ? '오늘 기록을 이미 작성했어요' : '오늘의 판단과 심리를 기록해보세요'}</p>
+        </div>
       </div>
       <span class="text-muted">›</span>
     </button>
@@ -2019,8 +2034,8 @@ renderers.settings = function() {
       </div>
     </div>
 
-    <button id="btn-goto-taborder" class="card p-4 mb-4 w-full text-left flex items-center justify-between">
-      <div><p class="text-sm font-semibold">🔀 탭 순서 편집</p><p class="text-xs text-muted mt-0.5">포모체크는 항상 하단 중앙에 고정되고, 나머지 탭 순서를 바꿀 수 있어요</p></div>
+    <button id="btn-goto-taborder" class="card p-3.5 mb-4 w-full text-left flex items-center justify-between">
+      <div class="flex items-center gap-3">${iconBadge('🔀','#64748b')}<div><p class="text-sm font-semibold">탭 순서 편집</p><p class="text-xs text-muted mt-0.5">포모체크는 항상 하단 중앙에 고정되고, 나머지 탭 순서를 바꿀 수 있어요</p></div></div>
       <span class="text-muted">›</span>
     </button>
 
@@ -2140,14 +2155,14 @@ renderers.more = function() {
     <h2 class="font-bold text-xl mt-2 mb-4">더보기</h2>
     <div class="space-y-2.5 mb-4">
       ${overflow.map(t => `
-        <button data-goto="${t}" class="card p-4 w-full text-left flex items-center justify-between">
-          <div class="flex items-center gap-3"><span class="text-xl">${TAB_META[t].icon}</span><span class="text-sm font-semibold">${TAB_META[t].label}</span></div>
+        <button data-goto="${t}" class="card p-3.5 w-full text-left flex items-center justify-between">
+          <div class="flex items-center gap-3">${iconBadge(TAB_META[t].icon, TAB_META[t].color)}<span class="text-sm font-semibold">${TAB_META[t].label}</span></div>
           <span class="text-muted">›</span>
         </button>
       `).join('')}
     </div>
-    <button id="more-taborder" class="card p-4 w-full text-left flex items-center justify-between mb-2.5">
-      <div class="flex items-center gap-3"><span class="text-xl">🔀</span><span class="text-sm font-semibold">탭 순서 편집</span></div>
+    <button id="more-taborder" class="card p-3.5 w-full text-left flex items-center justify-between mb-2.5">
+      <div class="flex items-center gap-3">${iconBadge('🔀', '#64748b')}<span class="text-sm font-semibold">탭 순서 편집</span></div>
       <span class="text-muted">›</span>
     </button>
     <p class="text-center text-[11px] text-muted mt-6">포모가드 · 나만의 투자 집사</p>
@@ -2169,8 +2184,8 @@ renderers.taborder = function() {
     document.getElementById('order-list').innerHTML = order.map((t,i) => `
       <div class="row p-3.5 flex items-center justify-between ${i<3?'':'opacity-60'}">
         <div class="flex items-center gap-3">
-          <span class="text-[10px] font-bold w-5 text-center ${i<3?'text-brand':'text-muted'}">${i+1}</span>
-          <span class="text-lg">${TAB_META[t].icon}</span>
+          <span class="text-[10px] font-bold w-4 text-center ${i<3?'text-brand':'text-muted'}">${i+1}</span>
+          ${iconBadge(TAB_META[t].icon, TAB_META[t].color, 34)}
           <span class="text-sm font-semibold">${TAB_META[t].label}</span>
           ${i<3?'<span class="badge bg-brand/15 text-brand">하단 메뉴</span>':''}
         </div>
