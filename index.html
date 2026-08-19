@@ -353,7 +353,7 @@ function showWelcomeGreeting(name) {
 function renderHeaderProfile() {
   const wrap = document.getElementById('btn-home');
   if (state.profile) {
-    wrap.innerHTML = `${state.profile.picture ? `<img src="${state.profile.picture}" class="w-8 h-8 rounded-full flex-shrink-0">` : `<span class="text-2xl">🛡️</span>`}<div><h1 class="font-extrabold text-lg leading-none tracking-tight">포모가드</h1><p class="text-[11px] text-brand leading-none mt-1.5 font-semibold">${escapeHtml(state.profile.name)}님, 오늘도 원칙대로 🧊</p></div>`;
+    wrap.innerHTML = `${state.profile.picture ? `<img src="${escapeHtml(state.profile.picture)}" class="w-8 h-8 rounded-full flex-shrink-0">` : `<span class="text-2xl">🛡️</span>`}<div><h1 class="font-extrabold text-lg leading-none tracking-tight">포모가드</h1><p class="text-[11px] text-brand leading-none mt-1.5 font-semibold">${escapeHtml(state.profile.name)}님, 오늘도 원칙대로 🧊</p></div>`;
   } else {
     wrap.innerHTML = `<span class="text-2xl">🛡️</span><div><h1 class="font-extrabold text-lg leading-none tracking-tight">포모가드</h1><p class="text-[11px] text-muted leading-none mt-1.5">쉽고 편하게, 나만의 투자 집사</p></div>`;
   }
@@ -486,6 +486,7 @@ const fmtPct = n => (n>0?'+':'') + n.toFixed(1) + '%';
 const fmtPrice = (n, currency) => currency==='USD' ? '$'+(+n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : fmtWon(n);
 const todayStr = () => new Date().toISOString().slice(0,10);
 function escapeHtml(s) { return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function safeUrl(u) { return /^https?:\/\//i.test(u||'') ? u : '#'; }
 function timeAgo(ts) {
   if (!ts) return '정보 없음';
   const diff = Date.now() - ts;
@@ -1076,7 +1077,7 @@ async function loadKeywordNews(keyword, forceRefresh) {
 }
 function renderNewsItems(blockEl, items) {
   blockEl.innerHTML = items.map(a => `
-    <a href="${escapeHtml(a.url)}" target="_blank" rel="noopener" class="row p-3.5 block">
+    <a href="${escapeHtml(safeUrl(a.url))}" target="_blank" rel="noopener" class="row p-3.5 block">
       <p class="text-sm font-semibold leading-snug">${escapeHtml(a.title)}</p>
       ${a.description ? `<p class="text-xs text-muted mt-1 line-clamp-2">${escapeHtml(a.description.slice(0,120))}</p>` : ''}
       <p class="text-[10px] text-muted mt-1.5">${escapeHtml(a.source)} · ${daysAgoLabel(a.publishedAt)}</p>
@@ -1252,7 +1253,7 @@ renderers.dashboard = function() {
     <button data-goto="factcheck" class="card p-4 mb-3 w-full text-left flex items-center justify-between">
       <div>
         <p class="text-sm font-semibold">🧊 최근 포모체크</p>
-        <p class="text-xs text-muted mt-0.5">${lastFc ? `${escapeHtml(lastFc.ticker)} · ${lastFc.result?.verdict||''}` : '지금 하려는 투자를 검증해보세요'}</p>
+        <p class="text-xs text-muted mt-0.5">${lastFc ? `${escapeHtml(lastFc.ticker)} · ${escapeHtml(lastFc.result?.verdict||'')}` : '지금 하려는 투자를 검증해보세요'}</p>
       </div>
       <span class="text-muted">›</span>
     </button>
@@ -1365,7 +1366,7 @@ renderers.factcheck = function() {
     const color = v==='위배' ? 'text-bad' : v==='주의' ? 'text-warn' : v==='양호' ? 'text-good' : 'text-muted';
     return `<div class="row p-3.5 flex items-center justify-between text-sm">
       <div><span class="font-semibold">${escapeHtml(f.ticker)}</span> <span class="text-xs text-muted">${f.date}</span></div>
-      <span class="font-bold ${color}">${v}</span>
+      <span class="font-bold ${color}">${escapeHtml(v)}</span>
     </div>`;
   }).join('');
 };
@@ -1432,7 +1433,7 @@ function renderFactCheckResult(result) {
         <span class="text-3xl">${s.emoji}</span>
         <div>
           <p class="text-xl font-bold ${s.color}">${escapeHtml(result.verdict)}</p>
-          <p class="text-xs text-muted">원칙 부합도 ${result.score ?? '-'}점</p>
+          <p class="text-xs text-muted">원칙 부합도 ${escapeHtml(String(result.score ?? '-'))}점</p>
         </div>
       </div>
       <p class="text-sm mb-3">${escapeHtml(result.summary||'')}</p>
@@ -1860,8 +1861,10 @@ function renderJournalList() {
 function compressImage(file) {
   return new Promise((resolve) => {
     const reader = new FileReader();
+    reader.onerror = () => resolve(null);
     reader.onload = () => {
       const img = new Image();
+      img.onerror = () => resolve(null);
       img.onload = () => {
         const maxW = 640;
         const scale = Math.min(1, maxW / img.width);
@@ -1912,8 +1915,14 @@ function openJournalForm(existing) {
 
   document.getElementById('jf-photo').onchange = async (e) => {
     const files = [...e.target.files];
-    for (const f of files) { pendingPhotos.push(await compressImage(f)); }
+    let failed = 0;
+    for (const f of files) {
+      const compressed = await compressImage(f);
+      if (compressed) pendingPhotos.push(compressed); else failed++;
+    }
+    if (failed) toast(`${failed}개 파일은 이미지로 인식되지 않아 제외했습니다.`, 'warn');
     renderPhotoPreview();
+    e.target.value = '';
   };
 
   document.getElementById('jf-save').onclick = () => {
@@ -1950,7 +1959,7 @@ renderers.settings = function() {
         <p class="text-xs text-muted mb-3">로그인하면 원칙·포트폴리오·거래내역·일지가 클라우드에 자동 저장돼요. 쿠키를 지우거나 기기를 바꿔도 로그인만 하면 그대로 돌아옵니다.</p>
         ${state.profile ? `
           <div class="row p-3 flex items-center gap-3 mb-1">
-            ${state.profile.picture ? `<img src="${state.profile.picture}" class="w-10 h-10 rounded-full">` : `<div class="w-10 h-10 rounded-full bg-brand flex items-center justify-center text-lg">👤</div>`}
+            ${state.profile.picture ? `<img src="${escapeHtml(state.profile.picture)}" class="w-10 h-10 rounded-full">` : `<div class="w-10 h-10 rounded-full bg-brand flex items-center justify-center text-lg">👤</div>`}
             <div class="flex-1"><p class="text-sm font-semibold">${escapeHtml(state.profile.name)}</p><p class="text-[11px] text-good">☁️ 클라우드 동기화 중 · ${localStorage.getItem('fomoguard_last_cloud_sync') ? '마지막 저장 '+timeAgo(+localStorage.getItem('fomoguard_last_cloud_sync')) : '동기화 대기'}</p></div>
             <button id="btn-logout" class="btn-ghost text-xs px-3 py-2 rounded-lg">로그아웃</button>
           </div>
