@@ -1099,18 +1099,19 @@ async function generateDailyAnalysis(silent) {
 
 /* ================= 실시간 뉴스 (관심 키워드, GNews 기반 헤드라인+요약) ================= */
 /* GNews 무료 플랜은 브라우저 직접 호출(CORS)이 localhost로 제한되어 있어, 배포된 도메인에서는
-   서버 프록시(/news-proxy, Cloudflare Pages Functions)를 거쳐 호출한다. */
+   서버 프록시(/news-proxy, Cloudflare Pages Functions)를 거쳐 호출한다.
+   프록시는 한글 키워드일 경우 영문으로 번역해 해외 뉴스까지 함께 검색하고,
+   비한국어 기사는 제목·요약을 한국어로 번역해서 돌려준다. */
 async function fetchNewsForKeyword(keyword) {
   const key = state.settings.newsApiKey;
   if (!key) throw new Error('뉴스 API 키가 등록되어 있지 않습니다.');
   const fromDate = new Date(Date.now() - 3*86400000).toISOString();
-  const hasKorean = /[가-힣]/.test(keyword);
   let res;
   try {
     res = await fetch('/news-proxy', {
       method: 'POST',
       headers: { 'content-type':'application/json' },
-      body: JSON.stringify({ keyword, apiKey:key, fromDate, max:10, lang: hasKorean ? 'ko' : undefined })
+      body: JSON.stringify({ keyword, apiKey:key, fromDate, max:10 })
     });
   } catch (e) {
     throw new Error('뉴스 서버에 연결하지 못했습니다. 잠시 후 다시 시도해주세요.');
@@ -1118,7 +1119,7 @@ async function fetchNewsForKeyword(keyword) {
   if (!res.ok) { const t = await res.text(); let msg; try { msg = JSON.parse(t).error; } catch(e) { msg = t; } throw new Error(msg || `뉴스 API 오류 (${res.status})`); }
   const data = await res.json();
   if (!Array.isArray(data.articles)) throw new Error('GNews 응답 형식이 예상과 다릅니다: ' + JSON.stringify(data).slice(0,200));
-  let items = data.articles.map(a => ({ title:a.title||'', url:a.url||'#', source:a.source?.name||'', publishedAt:a.publishedAt||'', description:a.description||'' }));
+  let items = data.articles.map(a => ({ title:a.titleKo||a.title||'', url:a.url||'#', source:a.source?.name||'', publishedAt:a.publishedAt||'', description:a.descriptionKo||a.description||'', translated:!!a.translated }));
   const cutoff = Date.now() - 3*86400000;
   items = items.filter(it => { const t = Date.parse(it.publishedAt); return !isNaN(t) && t >= cutoff; });
   items.sort((a,b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt));
@@ -1141,7 +1142,7 @@ renderers.news = function() {
   const el = document.getElementById('panel-news');
   el.innerHTML = `
     <h2 class="font-bold text-xl mt-2 mb-1">📰 실시간 뉴스</h2>
-    <p class="text-xs text-muted mb-4">관심 키워드(종목, 시장, 인물, 주제 등)를 등록하면 최근 3일 이내 헤드라인·요약을 최신순으로, 하루 1회 자동 + 언제든 수동으로 갱신해드려요.</p>
+    <p class="text-xs text-muted mb-4">관심 키워드(종목, 시장, 인물, 주제 등)를 등록하면 국내 뉴스뿐 아니라 해외 뉴스까지 자동 번역해서, 최근 3일 이내 헤드라인·요약을 최신순 최대 10건까지 하루 1회 자동 + 언제든 수동으로 갱신해드려요.</p>
     <div class="flex gap-2 mb-3">
       <input id="news-kw-input" type="text" placeholder="예: 미국증시, 삼성전자, 반도체">
       <button id="news-kw-add" class="btn-brand px-4 rounded-xl text-sm font-bold whitespace-nowrap">추가</button>
@@ -1210,7 +1211,7 @@ function renderNewsItems(blockEl, items) {
     <a href="${escapeHtml(safeUrl(a.url))}" target="_blank" rel="noopener" class="row p-3.5 block">
       <p class="text-sm font-semibold leading-snug">${escapeHtml(a.title)}</p>
       ${a.description ? `<p class="text-xs text-muted mt-1 line-clamp-2">${escapeHtml(a.description.slice(0,120))}</p>` : ''}
-      <p class="text-[10px] text-muted mt-1.5">${escapeHtml(a.source)} · ${daysAgoLabel(a.publishedAt)}</p>
+      <p class="text-[10px] text-muted mt-1.5">${escapeHtml(a.source)}${a.translated ? ' · 🌐 번역' : ''} · ${daysAgoLabel(a.publishedAt)}</p>
     </a>
   `).join('');
 }
