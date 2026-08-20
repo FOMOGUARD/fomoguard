@@ -229,7 +229,7 @@ async function callFreeAI({ system, user, maxTokens=1024 }) {
   if (!token) throw new Error('로그인 세션이 만료되었어요. 다시 로그인해주세요.');
   let res;
   try {
-    res = await fetch('/.netlify/functions/ai-free', {
+    res = await fetch('/ai-free', {
       method: 'POST',
       headers: { 'content-type':'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ system, user, maxTokens })
