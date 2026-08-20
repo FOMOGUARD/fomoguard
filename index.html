@@ -1102,6 +1102,16 @@ async function generateDailyAnalysis(silent) {
    서버 프록시(/news-proxy, Cloudflare Pages Functions)를 거쳐 호출한다.
    프록시는 한글 키워드일 경우 영문으로 번역해 해외 뉴스까지 함께 검색하고,
    비한국어 기사는 제목·요약을 한국어로 번역해서 돌려준다. */
+const NEWS_POSITIVE_WORDS = ['급등','상승','신고가','사상 최고','최고치','호실적','실적 개선','흑자','수주','대박','성장세','돌파','반등','강세','기대감','호재','확장','증가','인수 완료','깜짝 실적','surge','soar','rally','record high','beats','profit','growth','upgrade','jump','rebound','outperform','boost','breakthrough','all-time high'];
+const NEWS_NEGATIVE_WORDS = ['급락','폭락','하락','적자','손실','리콜','소송','조사','제재','파산','감원','구조조정','경고','우려','부진','약세','위기','악재','벌금','규제 강화','plunge','slump','crash','loss','lawsuit','recall','investigation','sanction','bankruptcy','layoff','warning','downgrade','probe','fine','sued'];
+function classifyNewsSentiment(text) {
+  const t = (text || '').toLowerCase();
+  let pos = 0, neg = 0;
+  NEWS_POSITIVE_WORDS.forEach(w => { if (t.includes(w.toLowerCase())) pos++; });
+  NEWS_NEGATIVE_WORDS.forEach(w => { if (t.includes(w.toLowerCase())) neg++; });
+  if (pos === neg) return 'neutral';
+  return pos > neg ? 'positive' : 'negative';
+}
 async function fetchNewsForKeyword(keyword) {
   const key = state.settings.newsApiKey;
   if (!key) throw new Error('뉴스 API 키가 등록되어 있지 않습니다.');
@@ -1119,11 +1129,15 @@ async function fetchNewsForKeyword(keyword) {
   if (!res.ok) { const t = await res.text(); let msg; try { msg = JSON.parse(t).error; } catch(e) { msg = t; } throw new Error(msg || `뉴스 API 오류 (${res.status})`); }
   const data = await res.json();
   if (!Array.isArray(data.articles)) throw new Error('GNews 응답 형식이 예상과 다릅니다: ' + JSON.stringify(data).slice(0,200));
-  let items = data.articles.map(a => ({ title:a.titleKo||a.title||'', url:a.url||'#', source:a.source?.name||'', publishedAt:a.publishedAt||'', description:a.descriptionKo||a.description||'', translated:!!a.translated }));
+  let items = data.articles.map(a => {
+    const title = a.titleKo||a.title||'', description = a.descriptionKo||a.description||'';
+    return { title, url:a.url||'#', source:a.source?.name||'', publishedAt:a.publishedAt||'', description, translated:!!a.translated,
+      sentiment: classifyNewsSentiment(`${a.title||''} ${a.description||''} ${title} ${description}`) };
+  });
   const cutoff = Date.now() - 3*86400000;
   items = items.filter(it => { const t = Date.parse(it.publishedAt); return !isNaN(t) && t >= cutoff; });
   items.sort((a,b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt));
-  items = items.slice(0, 8);
+  items = items.slice(0, 10);
   items.totalFound = data.totalArticles ?? data.articles.length;
   state.newsCache[keyword] = { date: todayStr(), items, totalFound: items.totalFound };
   save(LS.newsCache, state.newsCache);
@@ -1138,18 +1152,43 @@ async function fetchAllNewsKeywords() {
     await new Promise(r=>setTimeout(r, 400));
   }
 }
+let newsViewMode = 'all';
+let expandedNewsKeywords = new Set();
+let newsErrors = {};
+function newsSentimentBadge(sentiment) {
+  if (sentiment === 'positive') return `<span class="badge bg-good/15 text-good">🟢 호재</span>`;
+  if (sentiment === 'negative') return `<span class="badge bg-bad/15 text-bad">🔴 악재</span>`;
+  return '';
+}
+function newsCardHtml(a, showKeywordTag) {
+  return `
+    <a href="${escapeHtml(safeUrl(a.url))}" target="_blank" rel="noopener" class="row p-3.5 block">
+      ${(showKeywordTag && a._keyword) || a.sentiment !== 'neutral' ? `<div class="flex items-center gap-1.5 flex-wrap mb-1.5">
+        ${showKeywordTag && a._keyword ? `<span class="badge bg-brand/15 text-brand">#${escapeHtml(a._keyword)}</span>` : ''}
+        ${newsSentimentBadge(a.sentiment)}
+      </div>` : ''}
+      <p class="text-sm font-semibold leading-snug">${escapeHtml(a.title)}</p>
+      ${a.description ? `<p class="text-xs text-muted mt-1 line-clamp-2">${escapeHtml(a.description.slice(0,120))}</p>` : ''}
+      <p class="text-[10px] text-muted mt-1.5">${escapeHtml(a.source)}${a.translated ? ' · 🌐 번역' : ''} · ${daysAgoLabel(a.publishedAt)}</p>
+    </a>
+  `;
+}
 renderers.news = function() {
   const el = document.getElementById('panel-news');
   el.innerHTML = `
     <h2 class="font-bold text-xl mt-2 mb-1">📰 실시간 뉴스</h2>
-    <p class="text-xs text-muted mb-4">관심 키워드(종목, 시장, 인물, 주제 등)를 등록하면 국내 뉴스뿐 아니라 해외 뉴스까지 자동 번역해서, 최근 3일 이내 헤드라인·요약을 최신순 최대 10건까지 하루 1회 자동 + 언제든 수동으로 갱신해드려요.</p>
+    <p class="text-xs text-muted mb-4">관심 키워드(종목, 시장, 인물, 주제 등)를 등록하면 국내 뉴스뿐 아니라 해외 뉴스까지 자동 번역해서, 최근 3일 이내 헤드라인·요약을 최신순 최대 10건까지 하루 1회 자동 + 언제든 수동으로 갱신해드려요. 호재·악재는 참고용 자동 분류예요.</p>
     <div class="flex gap-2 mb-3">
       <input id="news-kw-input" type="text" placeholder="예: 미국증시, 삼성전자, 반도체">
       <button id="news-kw-add" class="btn-brand px-4 rounded-xl text-sm font-bold whitespace-nowrap">추가</button>
     </div>
     ${state.newsKeywords.length ? `<div class="flex gap-1.5 flex-wrap mb-4" id="news-kw-chips"></div>` : `<div class="card p-6 text-center text-sm text-muted mb-4">등록된 관심 키워드가 없습니다. 위에서 추가해보세요.</div>`}
     ${!state.settings.newsApiKey ? `<div class="card p-4 mb-4 border border-warn/30"><p class="text-xs text-warn">⚠️ 설정에서 뉴스 API 키를 등록해야 실제 뉴스를 불러올 수 있어요.</p></div>` : ''}
-    <div id="news-feed" class="space-y-4"></div>
+    ${state.newsKeywords.length ? `<div class="flex gap-1.5 mb-4 row p-1">
+      <button data-view="all" class="flex-1 py-2 rounded-lg text-xs font-bold ${newsViewMode==='all'?'bg-brand text-white':'text-muted'}">🗞️ 전체 모아보기</button>
+      <button data-view="byKeyword" class="flex-1 py-2 rounded-lg text-xs font-bold ${newsViewMode==='byKeyword'?'bg-brand text-white':'text-muted'}">🔖 키워드별</button>
+    </div>` : ''}
+    <div id="news-feed" class="space-y-3"></div>
   `;
   document.getElementById('news-kw-add').onclick = () => {
     const inp = document.getElementById('news-kw-input');
@@ -1165,55 +1204,91 @@ renderers.news = function() {
     chipsEl.querySelectorAll('[data-rmkw]').forEach(b => b.onclick = () => {
       state.newsKeywords = state.newsKeywords.filter(k=>k!==b.dataset.rmkw);
       delete state.newsCache[b.dataset.rmkw];
+      delete newsErrors[b.dataset.rmkw];
       save(LS.newsKeywords, state.newsKeywords); save(LS.newsCache, state.newsCache);
       renderers.news();
     });
+    document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => { newsViewMode = b.dataset.view; renderers.news(); });
   }
-  const feed = document.getElementById('news-feed');
-  feed.innerHTML = state.newsKeywords.map((k,i) => `
-    <div class="card p-4">
-      <div class="flex items-center justify-between mb-3">
-        <p class="text-sm font-bold text-brand">🔎 ${escapeHtml(k)}</p>
-        <button data-refreshkw="${escapeHtml(k)}" class="text-[11px] text-muted font-semibold">🔄 새로고침</button>
-      </div>
-      <div id="news-block-${i}" class="space-y-3"></div>
-    </div>
-  `).join('');
-  feed.querySelectorAll('[data-refreshkw]').forEach(b => b.onclick = () => loadKeywordNews(b.dataset.refreshkw, true));
-  (async () => { for (const k of state.newsKeywords) { await loadKeywordNews(k, false); await new Promise(r=>setTimeout(r, 500)); } })();
+  renderNewsFeed();
+  (async () => { for (const k of state.newsKeywords) { await loadKeywordNewsData(k, false); renderNewsFeed(); await new Promise(r=>setTimeout(r, 500)); } })();
 };
-async function loadKeywordNews(keyword, forceRefresh) {
-  const idx = state.newsKeywords.indexOf(keyword);
-  if (idx === -1) return;
-  const blockEl = document.getElementById('news-block-'+idx);
-  if (!blockEl) return;
+async function loadKeywordNewsData(keyword, forceRefresh) {
   const cached = state.newsCache[keyword];
-  if (!forceRefresh && cached && cached.date === todayStr()) {
-    if (cached.items.length === 0) { blockEl.innerHTML = `<p class="text-xs text-muted">최근 3일 내 관련 뉴스가 없습니다.${cached.totalFound ? ` (GNews 전체 검색결과 ${cached.totalFound}건 중 3일 이내 0건 — 기간을 벗어난 오래된 기사만 있는 것으로 보여요)` : ''}</p>`; return; }
-    renderNewsItems(blockEl, cached.items);
-    return;
-  }
-  if (!state.settings.newsApiKey) { blockEl.innerHTML = `<p class="text-xs text-muted">뉴스 API 키를 등록하면 이 키워드의 최신 뉴스를 볼 수 있어요.</p>`; return; }
-  blockEl.innerHTML = `<p class="text-xs text-muted"><span class="inline-block spin">⏳</span> 최신 뉴스를 불러오는 중...</p>`;
+  if (!forceRefresh && cached && cached.date === todayStr()) { delete newsErrors[keyword]; return; }
+  if (!state.settings.newsApiKey) return;
   try {
-    const items = await fetchNewsForKeyword(keyword);
-    if (items.length === 0) {
-      blockEl.innerHTML = `<p class="text-xs text-muted">최근 3일 내 관련 뉴스가 없습니다.${items.totalFound ? ` (GNews 전체 검색결과 ${items.totalFound}건 중 3일 이내 0건 — 기간을 벗어난 오래된 기사만 있는 것으로 보여요)` : ' (GNews에서 이 키워드로 검색된 기사가 아예 없습니다 — 다른 키워드를 시도해보세요)'}</p>`;
-      return;
-    }
-    renderNewsItems(blockEl, items);
+    await fetchNewsForKeyword(keyword);
+    delete newsErrors[keyword];
   } catch (err) {
-    blockEl.innerHTML = `<p class="text-xs text-bad">뉴스를 불러오지 못했습니다: ${escapeHtml(err.message)}</p>`;
+    newsErrors[keyword] = err.message;
   }
 }
-function renderNewsItems(blockEl, items) {
-  blockEl.innerHTML = items.map(a => `
-    <a href="${escapeHtml(safeUrl(a.url))}" target="_blank" rel="noopener" class="row p-3.5 block">
-      <p class="text-sm font-semibold leading-snug">${escapeHtml(a.title)}</p>
-      ${a.description ? `<p class="text-xs text-muted mt-1 line-clamp-2">${escapeHtml(a.description.slice(0,120))}</p>` : ''}
-      <p class="text-[10px] text-muted mt-1.5">${escapeHtml(a.source)}${a.translated ? ' · 🌐 번역' : ''} · ${daysAgoLabel(a.publishedAt)}</p>
-    </a>
-  `).join('');
+function renderNewsFeed() {
+  const feed = document.getElementById('news-feed');
+  if (!feed) return;
+  if (!state.newsKeywords.length) { feed.innerHTML = ''; return; }
+  if (!state.settings.newsApiKey) { feed.innerHTML = ''; return; }
+
+  if (newsViewMode === 'all') {
+    const merged = [];
+    const seen = new Set();
+    let anyLoading = false, anyError = false;
+    for (const k of state.newsKeywords) {
+      const cached = state.newsCache[k];
+      if (cached && cached.date === todayStr()) {
+        cached.items.forEach(it => { if (!seen.has(it.url)) { seen.add(it.url); merged.push({ ...it, _keyword:k }); } });
+      } else if (newsErrors[k]) { anyError = true; }
+      else { anyLoading = true; }
+    }
+    merged.sort((a,b) => Date.parse(b.publishedAt||0) - Date.parse(a.publishedAt||0));
+    const top = merged.slice(0, 10);
+    feed.innerHTML = `
+      ${top.length ? top.map(a=>newsCardHtml(a,true)).join('') : (anyLoading ? `<p class="text-xs text-muted text-center py-6"><span class="inline-block spin">⏳</span> 최신 뉴스를 불러오는 중...</p>` : `<p class="text-xs text-muted text-center py-6">최근 3일 내 관련 뉴스가 없습니다.</p>`)}
+      ${anyLoading && top.length ? `<p class="text-[10px] text-muted text-center">일부 키워드는 아직 갱신 중이에요...</p>` : ''}
+      ${anyError ? `<p class="text-[10px] text-bad text-center">일부 키워드 뉴스를 불러오지 못했어요. 키워드별 보기에서 확인해보세요.</p>` : ''}
+    `;
+  } else {
+    feed.innerHTML = state.newsKeywords.map(k => {
+      const cached = state.newsCache[k];
+      const isToday = cached && cached.date === todayStr();
+      const count = isToday ? cached.items.length : null;
+      const expanded = expandedNewsKeywords.has(k);
+      let bodyHtml = '';
+      if (expanded) {
+        if (newsErrors[k]) bodyHtml = `<p class="text-xs text-bad">뉴스를 불러오지 못했습니다: ${escapeHtml(newsErrors[k])}</p>`;
+        else if (!isToday) bodyHtml = `<p class="text-xs text-muted"><span class="inline-block spin">⏳</span> 최신 뉴스를 불러오는 중...</p>`;
+        else if (cached.items.length === 0) bodyHtml = `<p class="text-xs text-muted">최근 3일 내 관련 뉴스가 없습니다.${cached.totalFound ? ` (GNews 전체 검색결과 ${cached.totalFound}건 중 3일 이내 0건)` : ''}</p>`;
+        else bodyHtml = `<div class="space-y-3">${cached.items.map(a=>newsCardHtml(a,false)).join('')}</div>`;
+      }
+      return `
+        <div class="card overflow-hidden">
+          <div class="w-full p-3.5 flex items-center gap-2">
+            <button data-togglekw="${escapeHtml(k)}" class="flex-1 flex items-center gap-2 text-left min-w-0">
+              <span class="text-sm font-semibold truncate">🔎 ${escapeHtml(k)}</span>
+              ${count!==null ? `<span class="badge bg-brand/10 text-brand flex-shrink-0">${count}건</span>` : ''}
+              ${newsErrors[k] ? `<span class="badge bg-bad/15 text-bad flex-shrink-0">오류</span>` : ''}
+              <span class="text-muted text-xs ml-auto flex-shrink-0">${expanded?'▲':'▼'}</span>
+            </button>
+            <button data-refreshkw="${escapeHtml(k)}" class="text-[11px] text-muted font-semibold flex-shrink-0">🔄</button>
+          </div>
+          ${expanded ? `<div class="px-3.5 pb-3.5">${bodyHtml}</div>` : ''}
+        </div>
+      `;
+    }).join('');
+    feed.querySelectorAll('[data-togglekw]').forEach(b => b.onclick = () => {
+      const k = b.dataset.togglekw;
+      if (expandedNewsKeywords.has(k)) expandedNewsKeywords.delete(k); else expandedNewsKeywords.add(k);
+      renderNewsFeed();
+    });
+    feed.querySelectorAll('[data-refreshkw]').forEach(b => b.onclick = async () => {
+      const k = b.dataset.refreshkw;
+      expandedNewsKeywords.add(k);
+      renderNewsFeed();
+      await loadKeywordNewsData(k, true);
+      renderNewsFeed();
+    });
+  }
 }
 
 /* ================= TREEMAP (squarify) ================= */
