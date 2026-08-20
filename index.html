@@ -75,6 +75,17 @@ tailwind.config = {
   .seg button.active { background:#3182f6; color:#fff; }
   .chip { background:#1b202c; color:#c6cbd9; font-size:12px; padding:5px 11px; border-radius:999px; font-weight:500; }
   .chip.active { background:#3182f6; color:#fff; }
+  .detective-wrap { position: relative; width: 88px; height: 88px; margin: 0 auto 10px; }
+  .detective-wrap::before, .detective-wrap::after {
+    content: ''; position: absolute; inset: 8px; border-radius: 9999px; border: 2px solid rgba(49,130,246,0.4);
+    animation: radarPing 1.8s ease-out infinite;
+  }
+  .detective-wrap::after { animation-delay: 0.9s; }
+  @keyframes radarPing { 0% { transform: scale(0.55); opacity: 0.85; } 100% { transform: scale(1.5); opacity: 0; } }
+  .detective-img { animation: detectiveScan 1.6s ease-in-out infinite; transform-origin: 50% 85%; }
+  @keyframes detectiveScan { 0%,100% { transform: rotate(-5deg) translateX(-2px); } 50% { transform: rotate(5deg) translateX(2px); } }
+  .loading-dots { display:inline-block; overflow:hidden; vertical-align:bottom; width:0; animation: loadingDotsWidth 1.4s steps(4,end) infinite; }
+  @keyframes loadingDotsWidth { to { width: 1.3em; } }
 </style>
 </head>
 <body class="text-[#eef1f7]">
@@ -1414,17 +1425,12 @@ renderers.dashboard = function() {
 
   el.innerHTML = `
     <div class="hero-card rounded-[26px] p-5 mt-2 mb-3">
-      <div class="flex items-start justify-between gap-2">
-        <div class="flex-1 min-w-0">
-          <p class="text-xs text-muted mb-1.5">총 평가 자산 (원화 기준)</p>
-          <p class="text-[32px] font-extrabold leading-tight tracking-tight">${fmtWon(totalAssets)}</p>
-          ${hasData ? `<div class="flex items-center gap-1.5 mt-1.5">
-            <span class="badge ${totalPnlPct>0?'bg-up/15 text-up':totalPnlPct<0?'bg-down/15 text-down':'bg-line text-muted'}">${arrow} ${fmtPct(totalPnlPct)}</span>
-            <span class="text-xs ${pnlColor} font-semibold">${totalPnl>=0?'+':''}${fmtWon(totalPnl)}</span>
-          </div>` : `<p class="text-xs text-muted mt-1.5">포트폴리오 탭에서 보유 종목을 추가해보세요</p>`}
-        </div>
-        <img src="/mascot/${hasData ? (totalPnlPct>0?'pose-chart-up':totalPnlPct<0?'pose-chart-down':'pose-coin') : 'pose-wave'}.png" alt="" class="w-16 flex-shrink-0 -mt-1 -mr-1 object-contain">
-      </div>
+      <p class="text-xs text-muted mb-1.5">총 평가 자산 (원화 기준)</p>
+      <p class="text-[32px] font-extrabold leading-tight tracking-tight">${fmtWon(totalAssets)}</p>
+      ${hasData ? `<div class="flex items-center gap-1.5 mt-1.5">
+        <span class="badge ${totalPnlPct>0?'bg-up/15 text-up':totalPnlPct<0?'bg-down/15 text-down':'bg-line text-muted'}">${arrow} ${fmtPct(totalPnlPct)}</span>
+        <span class="text-xs ${pnlColor} font-semibold">${totalPnl>=0?'+':''}${fmtWon(totalPnl)}</span>
+      </div>` : `<p class="text-xs text-muted mt-1.5">포트폴리오 탭에서 보유 종목을 추가해보세요</p>`}
     </div>
 
     <div class="row p-3 mb-3 flex gap-2.5 items-start">
@@ -1645,7 +1651,10 @@ async function runFactCheck() {
   if (!canUseAI()) { toast('무료 AI를 쓰려면 Google 로그인을 해주세요. (또는 설정에서 본인 API 키 등록)', 'error'); switchTab('settings'); return; }
 
   const resultBox = document.getElementById('fc-result');
-  resultBox.innerHTML = `<div class="card p-6 text-center text-sm text-muted"><img src="/mascot/pose-detective.png" alt="" class="w-16 mx-auto mb-2 opacity-90"><br>AI가 원칙을 대조하는 중...</div>`;
+  resultBox.innerHTML = `<div class="card p-6 text-center text-sm text-muted">
+    <div class="detective-wrap"><img src="/mascot/pose-detective.png" alt="" class="detective-img w-full h-full object-contain"></div>
+    AI가 원칙을 대조하는 중<span class="loading-dots">...</span>
+  </div>`;
 
   const stats = computePortfolioStats();
   const principlesText = state.principles.length
