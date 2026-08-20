@@ -86,6 +86,14 @@ tailwind.config = {
   @keyframes detectiveScan { 0%,100% { transform: rotate(-5deg) translateX(-2px); } 50% { transform: rotate(5deg) translateX(2px); } }
   .loading-dots { display:inline-block; overflow:hidden; vertical-align:bottom; width:0; animation: loadingDotsWidth 1.4s steps(4,end) infinite; }
   @keyframes loadingDotsWidth { to { width: 1.3em; } }
+  .taborder-row { position:absolute; left:0; right:0; touch-action:none; transition: top .18s ease, box-shadow .18s ease; }
+  .taborder-row.dragging { transition:none; z-index:50; box-shadow: 0 12px 28px -8px rgba(0,0,0,0.55); }
+  .drag-handle { padding:10px; margin:-10px; cursor:grab; touch-action:none; }
+  .drag-handle:active { cursor:grabbing; }
+  .drag-bar { width:18px; height:2px; border-radius:1px; background:#5b6272; margin:3px 0; }
+  #tutorial-overlay { background: rgba(2,4,8,0.86); backdrop-filter: blur(3px); }
+  .tut-dot { width:6px; height:6px; border-radius:999px; background:#2a3040; transition: background .2s, width .2s; }
+  .tut-dot.active { background:#3182f6; width:16px; }
 </style>
 </head>
 <body class="text-[#eef1f7]">
@@ -99,6 +107,17 @@ tailwind.config = {
     <p class="text-sm text-muted mt-1 mb-10">워워, 진정하고 원칙대로. 쉽고 편하게, 나만의 투자 집사</p>
     <div id="welcome-google-wrap" class="mb-3 flex justify-center"></div>
     <button id="welcome-skip" class="text-xs text-muted underline underline-offset-2 mt-3">나중에 할게요, 그냥 둘러볼래요 →</button>
+  </div>
+</div>
+
+<div id="tutorial-overlay" class="fixed inset-0 z-[95] hidden px-6 items-center justify-center">
+  <button id="tutorial-skip" class="absolute top-6 right-5 text-xs text-muted underline underline-offset-2">건너뛰기</button>
+  <div class="w-full max-w-[380px] text-center">
+    <img id="tutorial-img" src="/mascot/pose-wave.png" alt="" class="w-32 mx-auto mb-2" style="filter: drop-shadow(0 16px 28px rgba(49,130,246,0.28))">
+    <h2 id="tutorial-title" class="font-extrabold text-xl mt-2"></h2>
+    <p id="tutorial-body" class="text-sm text-[#c6cbd9] mt-3 mb-8 leading-relaxed"></p>
+    <div id="tutorial-dots" class="flex items-center justify-center gap-1.5 mb-6"></div>
+    <button id="tutorial-next" class="btn-brand w-full max-w-[280px] py-3 rounded-full text-sm font-bold"></button>
   </div>
 </div>
 
@@ -348,8 +367,9 @@ async function handleSupabaseSession(session, isNewSignIn) {
   state.profile = { provider:'google', name: meta.full_name || meta.name || '회원', email: session.user.email||'', picture: meta.avatar_url || meta.picture || '' };
   save(LS.profile, state.profile);
   renderHeaderProfile();
+  if (localStorage.getItem('fomoguard_demo_seed') === '1') clearDemoData();
   await pullFromCloud();
-  if (isNewSignIn) { hideWelcomeOverlay(); showWelcomeGreeting(state.profile.name); }
+  if (isNewSignIn) { hideWelcomeOverlay(); showWelcomeGreeting(state.profile.name); maybeShowTutorial(); }
   if (currentTab === 'settings') renderers.settings();
 }
 async function initSupabaseAuth() {
@@ -421,7 +441,110 @@ function logout() {
   if (currentTab === 'settings') renderers.settings();
   toast('로그아웃했습니다.');
 }
-document.getElementById('welcome-skip').addEventListener('click', hideWelcomeOverlay);
+
+/* ---------------- 둘러보기(guest) 예시 데이터 ---------------- */
+function seedDemoData() {
+  const d = n => new Date(Date.now()-n*86400000).toISOString().slice(0,10);
+  const sId = uid(), hId = uid(), tId = uid(), nId = uid();
+  state.portfolio = [
+    { id:sId, name:'삼성전자', type:'core', currency:'KRW', quantity:30, avgPrice:68000, currentPrice:71500, ticker:'005930', exchange:'KRX', priceUpdatedAt:Date.now(), dailyChangePct:1.4 },
+    { id:hId, name:'SK하이닉스', type:'core', currency:'KRW', quantity:15, avgPrice:152000, currentPrice:189000, ticker:'000660', exchange:'KRX', priceUpdatedAt:Date.now(), dailyChangePct:2.1 },
+    { id:tId, name:'테슬라', type:'satellite', currency:'USD', quantity:5, avgPrice:210, currentPrice:248, ticker:'TSLA', exchange:'', priceUpdatedAt:Date.now(), dailyChangePct:-0.8 },
+    { id:nId, name:'엔비디아', type:'satellite', currency:'USD', quantity:8, avgPrice:118, currentPrice:135, ticker:'NVDA', exchange:'', priceUpdatedAt:Date.now(), dailyChangePct:2.6 }
+  ];
+  state.transactions = [
+    { id:uid(), date:d(60), holdingId:sId, name:'삼성전자', ticker:'005930', type:'buy', currency:'KRW', quantity:30, price:68000, avgPriceAtTime:68000, realizedPnL:null },
+    { id:uid(), date:d(50), holdingId:hId, name:'SK하이닉스', ticker:'000660', type:'buy', currency:'KRW', quantity:15, price:152000, avgPriceAtTime:152000, realizedPnL:null },
+    { id:uid(), date:d(40), holdingId:tId, name:'테슬라', ticker:'TSLA', type:'buy', currency:'USD', quantity:8, price:210, avgPriceAtTime:210, realizedPnL:null },
+    { id:uid(), date:d(35), holdingId:nId, name:'엔비디아', ticker:'NVDA', type:'buy', currency:'USD', quantity:8, price:118, avgPriceAtTime:118, realizedPnL:null },
+    { id:uid(), date:d(10), holdingId:tId, name:'테슬라', ticker:'TSLA', type:'sell', currency:'USD', quantity:3, price:235, avgPriceAtTime:210, realizedPnL:75 }
+  ];
+  state.cashFlows = [
+    { id:uid(), date:d(65), ts:Date.now()-65*86400000, type:'deposit', amountKRW:8000000, note:'초기 투자금 입금', currency:'KRW', originalAmount:8000000 },
+    { id:uid(), date:d(60), ts:Date.now()-60*86400000, type:'buy', amountKRW:-2040000, note:'삼성전자 매수', currency:'KRW' },
+    { id:uid(), date:d(50), ts:Date.now()-50*86400000, type:'buy', amountKRW:-2280000, note:'SK하이닉스 매수', currency:'KRW' },
+    { id:uid(), date:d(40), ts:Date.now()-40*86400000, type:'buy', amountKRW:-2268000, note:'테슬라 매수', currency:'USD', originalAmount:1680 },
+    { id:uid(), date:d(35), ts:Date.now()-35*86400000, type:'buy', amountKRW:-1274400, note:'엔비디아 매수', currency:'USD', originalAmount:944 },
+    { id:uid(), date:d(10), ts:Date.now()-10*86400000, type:'sell', amountKRW:951750, note:'테슬라 매도', currency:'USD', originalAmount:705 },
+    { id:uid(), date:d(5), ts:Date.now()-5*86400000, type:'withdraw', amountKRW:-500000, note:'생활비로 출금', currency:'KRW', originalAmount:500000 }
+  ];
+  state.principles = [
+    { id:uid(), title:'한 종목 비중 30% 초과 금지', body:'아무리 확신이 강해도 한 종목에 전체 자산의 30% 이상을 담지 않는다. 계란은 한 바구니에 담지 않는다.', source:'직접작성', createdAt: Date.now()-60*86400000 },
+    { id:uid(), title:'-15% 도달 시 반드시 재검토', body:'평단 대비 -15% 하락하면 추가매수든 손절이든 반드시 원칙에 따라 재검토한다. 감정으로 버티지 않는다.', source:'직접작성', createdAt: Date.now()-60*86400000 },
+    { id:uid(), title:'뉴스만 보고 당일 매수 금지', body:'급등 뉴스나 SNS 화제만 보고 당일 매수하지 않는다. 최소 하루는 숙고한 뒤 포모체크를 거친다.', source:'직접작성', createdAt: Date.now()-60*86400000 }
+  ];
+  state.journal = [
+    { id:uid(), date:d(12), mood:'anxious', title:'반도체 급락에 흔들렸던 하루', content:'SK하이닉스가 하루에 -4% 빠지니까 손이 근질근질했다. 그래도 원칙대로 하루 더 지켜보기로 했다.', photos:[], hashtags:['반도체','존버'] },
+    { id:uid(), date:d(3), mood:'confident', title:'테슬라 일부 익절', content:'목표 수익률에 도달해서 계획대로 절반 정도 매도했다. 감정이 아니라 계획대로 움직이니 마음이 편하다.', photos:[], hashtags:['테슬라','익절'] }
+  ];
+  state.factchecks = [
+    { id:uid(), date:d(2), ticker:'엔비디아', amount:1000000, reason:'실적 발표 후 급등 뉴스를 보고 바로 추가매수하고 싶어짐', result:{ verdict:'주의', score:55, summary:'단기 뉴스 반응 매수는 등록된 원칙과 충돌할 소지가 있습니다.', reasons:['뉴스만 보고 당일 매수 금지 원칙과 충돌','이미 알파 비중이 일정 수준 존재','단기 변동성이 큰 구간'], advice:'하루 정도 더 지켜본 뒤, 여전히 확신이 있다면 소액으로 분할 매수를 고려하세요.' } }
+  ];
+  const trend = [7650000,7720000,7540000,7810000,7900000,7860000,8050000];
+  state.snapshots = [7,6,5,4,3,2,1].map((n,i) => ({ date:d(n), totalValue:trend[i], totalCost:7072120 }));
+  save(LS.portfolio, state.portfolio);
+  save(LS.transactions, state.transactions);
+  save(LS.cashFlows, state.cashFlows);
+  save(LS.principles, state.principles);
+  save(LS.journal, state.journal);
+  save(LS.factchecks, state.factchecks);
+  save(LS.snapshots, state.snapshots);
+  localStorage.setItem('fomoguard_demo_seed', '1');
+}
+function clearDemoData() {
+  state.principles=[]; state.portfolio=[]; state.journal=[]; state.transactions=[]; state.factchecks=[]; state.snapshots=[]; state.cashFlows=[];
+  save(LS.principles, state.principles); save(LS.portfolio, state.portfolio); save(LS.journal, state.journal);
+  save(LS.transactions, state.transactions); save(LS.factchecks, state.factchecks); save(LS.snapshots, state.snapshots); save(LS.cashFlows, state.cashFlows);
+  localStorage.removeItem('fomoguard_demo_seed');
+}
+document.getElementById('welcome-skip').addEventListener('click', () => {
+  hideWelcomeOverlay();
+  if (!state.profile && !state.portfolio.length && !state.principles.length && !state.journal.length) {
+    seedDemoData();
+    if (renderers[currentTab]) renderers[currentTab]();
+    toast('예시 데이터로 미리 채워드렸어요. 자유롭게 둘러보고, 실제 내 정보로 바꿔보세요 🐜', 'info');
+  }
+  maybeShowTutorial();
+});
+
+/* ---------------- 첫 진입 튜토리얼 ---------------- */
+const TUTORIAL_STEPS = [
+  { img:'pose-wave', title:'안녕! 나는 투자워워예요 🐜', body:'3분이면 다 둘러봐요. 어려운 말 없이, 딱 필요한 것만 빠르게 알려드릴게요.' },
+  { img:'face-A', title:'📊 대시보드 — 내 자산 한눈에', body:'지금 내 전체 자산이 얼마인지, 오늘 하루는 얼마나 움직였는지 여기서 다 보여요. "전일대비"는 어제보다 오늘 얼마나 올랐는지를 뜻해요.' },
+  { img:'pose-detective', title:'🧊 포모체크 — 사고 싶을 때 누르세요', body:'"가즈아!" 하고 싶을 때 하단 정중앙 버튼을 눌러보세요. AI가 내가 세운 원칙과 비교해서 "이거 진짜 사도 돼?"를 냉정하게 판단해줘요.' },
+  { img:'pose-chart-up', title:'💼 포트폴리오 — 코어 vs 알파', body:'코어는 오래 들고 갈 든든한 종목, 알파는 공격적으로 굴려볼 종목이에요. 종목마다 오늘 얼마나 움직였는지도 바로 보여드려요.' },
+  { img:'pose-point', title:'📓 투자일지 — 미래의 나에게 남기는 메모', body:'오늘 왜 그런 선택을 했는지 적어두세요. 매수·매도, 현금 입출금 기록도 여기 자동으로 쌓여요.' },
+  { img:'face-G', title:'📜 투자원칙 — 나만의 투자 규칙', body:'"-15%면 무조건 재검토" 같은 나만의 규칙을 적어두면, 포모체크가 그 규칙을 기준으로 판단해줘요.' },
+  { img:'face-B', title:'☰ 더보기 — 설정은 다 여기에', body:'탭 순서 바꾸기, 실시간 뉴스, 로그인·API 키 설정까지 전부 여기 모여있어요. 언제든 다시 볼 수 있으니 편하게 눌러보세요!' }
+];
+let tutorialStep = 0;
+function renderTutorialStep() {
+  const s = TUTORIAL_STEPS[tutorialStep];
+  document.getElementById('tutorial-img').src = `/mascot/${s.img}.png`;
+  document.getElementById('tutorial-title').textContent = s.title;
+  document.getElementById('tutorial-body').textContent = s.body;
+  document.getElementById('tutorial-dots').innerHTML = TUTORIAL_STEPS.map((_,i)=>`<span class="tut-dot ${i===tutorialStep?'active':''}"></span>`).join('');
+  document.getElementById('tutorial-next').textContent = tutorialStep===TUTORIAL_STEPS.length-1 ? '시작하기! 🚀' : '다음';
+}
+function showTutorial() {
+  tutorialStep = 0;
+  renderTutorialStep();
+  const ov = document.getElementById('tutorial-overlay');
+  ov.classList.remove('hidden'); ov.classList.add('flex');
+}
+function hideTutorial() {
+  const ov = document.getElementById('tutorial-overlay');
+  ov.classList.add('hidden'); ov.classList.remove('flex');
+  localStorage.setItem('fomoguard_tutorial_seen', '1');
+}
+function maybeShowTutorial() {
+  if (!localStorage.getItem('fomoguard_tutorial_seen')) showTutorial();
+}
+document.getElementById('tutorial-next').addEventListener('click', () => {
+  if (tutorialStep < TUTORIAL_STEPS.length-1) { tutorialStep++; renderTutorialStep(); }
+  else hideTutorial();
+});
+document.getElementById('tutorial-skip').addEventListener('click', hideTutorial);
 
 /* ---------------- nav / tabs / back history ---------------- */
 const TAB_META = {
@@ -984,6 +1107,17 @@ function realizedSummary() {
   return { pnl, costBasis };
 }
 function computeCashBalance() { return state.cashFlows.reduce((s,c)=>s+c.amountKRW, 0); }
+function computeDailyChange() {
+  const sorted = [...state.snapshots].sort((a,b)=>a.date.localeCompare(b.date));
+  const prevEntries = sorted.filter(s => s.date !== todayStr());
+  if (!prevEntries.length) return null;
+  const prev = prevEntries[prevEntries.length-1];
+  const { totalValue } = computePortfolioStats();
+  if (!(prev.totalValue > 0)) return null;
+  const changeAmt = totalValue - prev.totalValue;
+  const changePct = changeAmt/prev.totalValue*100;
+  return { changeAmt, changePct, prevDate: prev.date };
+}
 function recordCashFlow(type, amountKRW, note, date, origin) {
   state.cashFlows.push({ id: uid(), date: date || todayStr(), ts: Date.now(), type, amountKRW, note: note || '', currency: (origin&&origin.currency)||'KRW', originalAmount: origin?origin.amount:undefined });
   save(LS.cashFlows, state.cashFlows);
@@ -1049,17 +1183,20 @@ async function syncStockPrices() {
   for (const ex of Object.keys(groups)) {
     const hs = groups[ex];
     const symbols = [...new Set(hs.map(h=>h.ticker))].join(',');
-    let url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(symbols)}&apikey=${encodeURIComponent(key)}`;
+    let url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(symbols)}&apikey=${encodeURIComponent(key)}`;
     if (ex) url += `&exchange=${encodeURIComponent(ex)}`;
     try {
       const res = await fetch(url);
       const data = await res.json();
       hs.forEach(h => {
-        let priceStr;
-        if (data.price !== undefined) priceStr = data.price;
-        else if (data[h.ticker] && data[h.ticker].price !== undefined) priceStr = data[h.ticker].price;
-        if (priceStr && !isNaN(+priceStr)) { h.currentPrice = +priceStr; h.priceUpdatedAt = Date.now(); ok++; }
-        else fail++;
+        let priceStr, pctStr;
+        if (data.close !== undefined) { priceStr = data.close; pctStr = data.percent_change; }
+        else if (data[h.ticker] && data[h.ticker].close !== undefined) { priceStr = data[h.ticker].close; pctStr = data[h.ticker].percent_change; }
+        if (priceStr && !isNaN(+priceStr)) {
+          h.currentPrice = +priceStr; h.priceUpdatedAt = Date.now();
+          h.dailyChangePct = (pctStr!==undefined && !isNaN(+pctStr)) ? +pctStr : undefined;
+          ok++;
+        } else fail++;
       });
     } catch(e) { fail += hs.length; }
     await new Promise(r=>setTimeout(r, 800));
@@ -1422,14 +1559,16 @@ renderers.dashboard = function() {
   const q = quoteOfTheDay();
   const coreColor = coreReturnPct>0?'text-up':coreReturnPct<0?'text-down':'text-muted';
   const satColor = satReturnPct>0?'text-up':satReturnPct<0?'text-down':'text-muted';
+  const daily = hasData ? computeDailyChange() : null;
 
   el.innerHTML = `
     <div class="hero-card rounded-[26px] p-5 mt-2 mb-3">
       <p class="text-xs text-muted mb-1.5">총 평가 자산 (원화 기준)</p>
       <p class="text-[32px] font-extrabold leading-tight tracking-tight">${fmtWon(totalAssets)}</p>
-      ${hasData ? `<div class="flex items-center gap-1.5 mt-1.5">
-        <span class="badge ${totalPnlPct>0?'bg-up/15 text-up':totalPnlPct<0?'bg-down/15 text-down':'bg-line text-muted'}">${arrow} ${fmtPct(totalPnlPct)}</span>
+      ${hasData ? `<div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
+        <span class="badge ${totalPnlPct>0?'bg-up/15 text-up':totalPnlPct<0?'bg-down/15 text-down':'bg-line text-muted'}">누적 ${arrow} ${fmtPct(totalPnlPct)}</span>
         <span class="text-xs ${pnlColor} font-semibold">${totalPnl>=0?'+':''}${fmtWon(totalPnl)}</span>
+        ${daily ? `<span class="badge ${daily.changePct>0?'bg-up/15 text-up':daily.changePct<0?'bg-down/15 text-down':'bg-line text-muted'}">전일대비 ${daily.changePct>0?'▲':daily.changePct<0?'▼':''} ${fmtPct(daily.changePct)}</span>` : ''}
       </div>` : `<p class="text-xs text-muted mt-1.5">포트폴리오 탭에서 보유 종목을 추가해보세요</p>`}
     </div>
 
@@ -1768,6 +1907,7 @@ renderers.portfolio = function() {
           </div>
           <div class="text-right">
             <p class="text-sm font-bold ${retColorCls}">${fmtPct(ret)}</p>
+            ${h.dailyChangePct!==undefined ? `<p class="text-[10px] mt-0.5 ${h.dailyChangePct>0?'text-up':h.dailyChangePct<0?'text-down':'text-muted'}">전일대비 ${h.dailyChangePct>0?'▲':h.dailyChangePct<0?'▼':''} ${fmtPct(h.dailyChangePct)}</p>` : ''}
             <p class="text-xs text-muted">${fmtWon(value)}${cur==='USD'?' (환산)':''}</p>
           </div>
         </div>
@@ -1960,18 +2100,23 @@ function openHoldingForm(existing) {
   };
 }
 
-function openCashFlowModal() {
+function openCashFlowModal(mode) {
+  mode = mode === 'withdraw' ? 'withdraw' : 'deposit';
   const balance = computeCashBalance();
   const history = [...state.cashFlows].sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,10);
-  const typeLabel = { deposit:'입금', buy:'매수', sell:'매도' };
+  const typeLabel = { deposit:'입금', withdraw:'출금', buy:'매수', sell:'매도' };
   openModal('현금 잔고', `
     <div class="row p-3 mb-4 text-center">
       <p class="text-[10px] text-muted mb-1">현재 현금 잔고</p>
       <p class="text-xl font-extrabold">${fmtWon(balance)}</p>
     </div>
+    <div class="seg mb-3" id="cf-seg">
+      <button data-m="deposit" class="${mode==='deposit'?'active':''}">입금</button>
+      <button data-m="withdraw" class="${mode==='withdraw'?'active':''}">출금</button>
+    </div>
     <div class="space-y-3 mb-4">
       <div class="flex gap-2">
-        <div class="flex-1"><label class="text-xs text-muted mb-1 block">입금액</label><input id="cf-amount" type="number" placeholder="예: 1000000"></div>
+        <div class="flex-1"><label class="text-xs text-muted mb-1 block">${mode==='deposit'?'입금액':'출금액'}</label><input id="cf-amount" type="number" placeholder="예: 1000000"></div>
         <div style="width:96px"><label class="text-xs text-muted mb-1 block">통화</label>
           <select id="cf-currency">
             <option value="KRW">원화 (₩)</option>
@@ -1980,9 +2125,9 @@ function openCashFlowModal() {
         </div>
       </div>
       <p id="cf-fx-hint" class="text-[10px] text-muted hidden"></p>
-      <div><label class="text-xs text-muted mb-1 block">메모 (선택)</label><input id="cf-note" type="text" placeholder="예: 8월 정기 입금"></div>
+      <div><label class="text-xs text-muted mb-1 block">메모 (선택)</label><input id="cf-note" type="text" placeholder="${mode==='deposit'?'예: 8월 정기 입금':'예: 생활비로 출금'}"></div>
     </div>
-    <button id="cf-submit" class="btn-brand w-full py-3 rounded-xl text-sm font-bold mb-4">입금 기록</button>
+    <button id="cf-submit" class="btn-brand w-full py-3 rounded-xl text-sm font-bold mb-4">${mode==='deposit'?'입금 기록':'출금 기록'}</button>
     <p class="text-xs font-semibold mb-2">최근 내역</p>
     <div class="space-y-1.5 max-h-48 overflow-y-auto">
       ${history.length ? history.map(c => `
@@ -1995,6 +2140,7 @@ function openCashFlowModal() {
   `, `
     <button class="btn-ghost px-4 py-2.5 rounded-xl text-sm w-full" onclick="closeModal()">닫기</button>
   `);
+  document.querySelectorAll('#cf-seg button').forEach(b => b.onclick = () => openCashFlowModal(b.dataset.m));
   const curSel = document.getElementById('cf-currency');
   const fxHint = document.getElementById('cf-fx-hint');
   const updateFxHint = () => {
@@ -2009,12 +2155,19 @@ function openCashFlowModal() {
     const amount = +document.getElementById('cf-amount').value;
     const currency = curSel.value;
     const note = document.getElementById('cf-note').value.trim();
-    if (!amount || amount<=0) { toast('입금액을 올바르게 입력해주세요.', 'warn'); return; }
+    if (!amount || amount<=0) { toast(`${mode==='deposit'?'입금':'출금'}액을 올바르게 입력해주세요.`, 'warn'); return; }
     const amountKRW = currency === 'USD' ? amount * (state.fx.rate||1) : amount;
-    recordCashFlow('deposit', amountKRW, note, undefined, { currency, amount });
-    toast('입금을 기록했습니다.', 'success');
+    if (mode === 'withdraw') {
+      if (amountKRW > balance + 0.5) { toast('현재 현금 잔고보다 큰 금액은 출금할 수 없어요.', 'warn'); return; }
+      recordCashFlow('withdraw', -amountKRW, note, undefined, { currency, amount });
+      toast('출금을 기록했습니다.', 'success');
+    } else {
+      recordCashFlow('deposit', amountKRW, note, undefined, { currency, amount });
+      toast('입금을 기록했습니다.', 'success');
+    }
     if (currentTab === 'dashboard') renderers.dashboard();
-    openCashFlowModal();
+    if (currentTab === 'journal') renderJournalList();
+    openCashFlowModal(mode);
   };
 }
 
@@ -2172,10 +2325,11 @@ function renderJournalList() {
   if (!list) return;
   const diary = state.journal.map(j => ({ ...j, _kind:'diary' }));
   const tx = state.transactions.map(t => ({ ...t, _kind:'tx' }));
+  const cash = state.cashFlows.filter(c => c.type==='deposit' || c.type==='withdraw').map(c => ({ ...c, _kind:'cash' }));
   let items;
   if (journalViewMode === 'diary') items = diary;
-  else if (journalViewMode === 'transactions') items = tx;
-  else items = [...diary, ...tx];
+  else if (journalViewMode === 'transactions') items = [...tx, ...cash];
+  else items = [...diary, ...tx, ...cash];
   items = items.slice().sort((a,b) => a.date===b.date ? 0 : (a.date>b.date?1:-1)).reverse();
 
   if (journalHashtagFilter) items = items.filter(it => it._kind==='diary' && (it.hashtags||[]).includes(journalHashtagFilter));
@@ -2183,14 +2337,16 @@ function renderJournalList() {
     const q = journalSearchQuery.trim().toLowerCase();
     items = items.filter(it => {
       if (it._kind==='diary') return (it.title||'').toLowerCase().includes(q) || (it.content||'').toLowerCase().includes(q) || (it.hashtags||[]).some(t=>t.toLowerCase().includes(q));
+      if (it._kind==='cash') return (it.note||'').toLowerCase().includes(q) || (it.type==='deposit'?'입금':'출금').includes(q);
       return (it.name||'').toLowerCase().includes(q) || (it.ticker||'').toLowerCase().includes(q);
     });
   }
   if (items.length === 0) {
-    list.innerHTML = `<div class="card p-8 text-center text-sm text-muted">${journalHashtagFilter||journalSearchQuery ? '조건에 맞는 기록이 없습니다.' : (journalViewMode==='transactions' ? '아직 매수·매도 기록이 없습니다. 포트폴리오에서 거래하기를 이용해보세요.' : '매일의 투자 심리와 판단을 기록해보세요.<br>과거의 나를 돌아보는 것이 가장 좋은 스승입니다.')}</div>`;
+    list.innerHTML = `<div class="card p-8 text-center text-sm text-muted">${journalHashtagFilter||journalSearchQuery ? '조건에 맞는 기록이 없습니다.' : (journalViewMode==='transactions' ? '아직 매수·매도·입출금 기록이 없습니다. 포트폴리오나 현금 잔고에서 거래·입출금을 이용해보세요.' : '매일의 투자 심리와 판단을 기록해보세요.<br>과거의 나를 돌아보는 것이 가장 좋은 스승입니다.')}</div>`;
     return;
   }
-  list.innerHTML = items.map(it => it._kind==='diary' ? `
+  list.innerHTML = items.map(it => {
+    if (it._kind === 'diary') return `
     <div class="card p-4">
       <div class="flex items-center justify-between mb-1">
         <p class="text-sm font-semibold">${it.date} (${weekdayKR(it.date)}) ${MOODS[it.mood]||''}</p>
@@ -2204,7 +2360,18 @@ function renderJournalList() {
       ${(it.photos&&it.photos.length) ? `<div class="flex gap-2 mt-2.5 overflow-x-auto no-scrollbar">${it.photos.map(p=>`<img src="${p}" class="w-20 h-20 object-cover rounded-lg flex-shrink-0 journal-photo" data-src="${p}">`).join('')}</div>` : ''}
       ${(it.hashtags&&it.hashtags.length) ? `<div class="flex gap-1.5 flex-wrap mt-2.5">${it.hashtags.map(t=>`<span class="chip">#${escapeHtml(t)}</span>`).join('')}</div>` : ''}
     </div>
-  ` : `
+  `;
+    if (it._kind === 'cash') return `
+    <div class="card p-4">
+      <div class="flex items-center justify-between mb-1">
+        <p class="text-sm font-semibold">${it.date} (${weekdayKR(it.date)})</p>
+        <span class="badge ${it.type==='deposit'?'bg-good/15 text-good':'bg-bad/15 text-bad'}">${it.type==='deposit'?'입금':'출금'}</span>
+      </div>
+      <p class="text-sm font-medium">💰 현금 ${it.type==='deposit'?'입금':'출금'}${it.note?' · '+escapeHtml(it.note):''}</p>
+      <p class="text-xs font-semibold mt-1.5 ${it.amountKRW>=0?'text-up':'text-down'}">${it.amountKRW>=0?'+':''}${fmtWon(it.amountKRW)}</p>
+    </div>
+  `;
+    return `
     <div class="card p-4">
       <div class="flex items-center justify-between mb-1">
         <p class="text-sm font-semibold">${it.date} (${weekdayKR(it.date)})</p>
@@ -2214,7 +2381,8 @@ function renderJournalList() {
       <p class="text-xs text-muted mt-1">${it.quantity}주 · ${fmtPrice(it.price, it.currency)}</p>
       ${it.type==='sell' ? `<p class="text-xs font-semibold mt-1.5 ${it.realizedPnL>=0?'text-up':'text-down'}">실현손익 ${it.realizedPnL>=0?'+':''}${fmtPrice(it.realizedPnL, it.currency)} (${fmtPct(it.avgPriceAtTime>0?(it.price-it.avgPriceAtTime)/it.avgPriceAtTime*100:0)})</p>` : ''}
     </div>
-  `).join('');
+  `;
+  }).join('');
   list.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => openJournalForm(state.journal.find(j=>j.id===b.dataset.edit)));
   list.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
     state.journal = state.journal.filter(j=>j.id!==b.dataset.del);
@@ -2492,6 +2660,7 @@ renderers.settings = function() {
     confirmModal('정말 초기화할까요?', '이 작업은 되돌릴 수 없습니다. 초기화 전 백업을 권장합니다.', () => {
       Object.values(LS).forEach(k => k !== LS.settings && localStorage.removeItem(k));
       localStorage.removeItem('fomoguard_last_sync_date');
+      localStorage.removeItem('fomoguard_demo_seed');
       state.principles = []; state.portfolio = []; state.journal = []; state.transactions = []; state.factchecks = []; state.snapshots = []; state.cashFlows = [];
       state.fx = { rate:null, updatedAt:null }; state.marketSnapshot = null; state.dailyAnalysis = null; state.newsKeywords = []; state.newsCache = {}; state.profile = null;
       renderHeaderProfile();
@@ -2506,6 +2675,19 @@ renderers.more = function() {
   const overflow = overflowTabs();
   el.innerHTML = `
     <h2 class="font-bold text-xl mt-2 mb-4">더보기</h2>
+    ${!state.profile ? `
+    <div class="card p-4 mb-4" style="background:linear-gradient(135deg,rgba(49,130,246,.16),rgba(49,130,246,.02));border:1px solid rgba(49,130,246,.28)">
+      <div class="flex items-center gap-3 mb-3">
+        <img src="/mascot/pose-wave.png" alt="" class="w-12 h-12 object-contain flex-shrink-0">
+        <div>
+          <p class="text-sm font-bold">지금은 둘러보기 중이에요 👀</p>
+          <p class="text-xs text-muted mt-0.5">예시 데이터로 미리 체험해보는 화면이에요</p>
+        </div>
+      </div>
+      <div id="more-google-wrap" class="flex justify-center mb-2"></div>
+      <p class="text-center text-[11px] text-brand font-semibold">내 계정 로그인하고 서비스 이용해보기 →</p>
+    </div>
+    ` : ''}
     <div class="space-y-2.5 mb-4">
       ${overflow.map(t => `
         <button data-goto="${t}" class="card p-3.5 w-full text-left flex items-center justify-between">
@@ -2522,44 +2704,96 @@ renderers.more = function() {
   `;
   el.querySelectorAll('[data-goto]').forEach(b => b.onclick = () => switchTab(b.dataset.goto));
   document.getElementById('more-taborder').onclick = () => switchTab('taborder');
+  if (!state.profile) renderGoogleButton('more-google-wrap');
 };
 
 /* ================= TAB ORDER EDITOR ================= */
+const TABORDER_ROW_H = 64, TABORDER_GAP = 8;
 renderers.taborder = function() {
   const el = document.getElementById('panel-taborder');
   const order = state.settings.tabOrder;
   el.innerHTML = `
     <h2 class="font-bold text-xl mt-2 mb-1">🔀 탭 순서 편집</h2>
-    <p class="text-xs text-muted mb-4">🧊 포모체크는 항상 하단 메뉴 정중앙에 고정됩니다. 아래 목록 중 위 3개가 나머지 하단 메뉴 자리에 표시돼요.</p>
-    <div id="order-list" class="space-y-2"></div>
+    <p class="text-xs text-muted mb-4">🧊 포모체크는 항상 하단 메뉴 정중앙에 고정됩니다. 오른쪽 손잡이(☰)를 눌러 끌면 순서를 바로 옮길 수 있어요. 위 3개가 하단 메뉴 자리에 표시돼요.</p>
+    <div id="order-list" class="relative" style="height:${order.length*(TABORDER_ROW_H+TABORDER_GAP)-TABORDER_GAP}px"></div>
   `;
-  function renderList() {
-    document.getElementById('order-list').innerHTML = order.map((t,i) => `
-      <div class="row p-3.5 flex items-center justify-between ${i<3?'':'opacity-60'}">
+  function rowHtml(t, i) {
+    return `
+      <div class="row taborder-row p-3.5 flex items-center justify-between ${i<3?'':'opacity-60'}" data-tab-item="${t}" style="top:${i*(TABORDER_ROW_H+TABORDER_GAP)}px;height:${TABORDER_ROW_H}px">
         <div class="flex items-center gap-3">
-          <span class="text-[10px] font-bold w-4 text-center ${i<3?'text-brand':'text-muted'}">${i+1}</span>
+          <span class="text-[10px] font-bold w-4 text-center order-num ${i<3?'text-brand':'text-muted'}">${i+1}</span>
           ${iconBadge(TAB_META[t].icon, TAB_META[t].color, 34)}
           <span class="text-sm font-semibold">${TAB_META[t].label}</span>
-          ${i<3?'<span class="badge bg-brand/15 text-brand">하단 메뉴</span>':''}
+          <span class="badge bg-brand/15 text-brand order-badge ${i<3?'':'hidden'}">하단 메뉴</span>
         </div>
-        <div class="flex gap-1">
-          <button data-up="${i}" class="btn-ghost w-8 h-8 rounded-lg text-sm" ${i===0?'disabled style="opacity:.3"':''}>↑</button>
-          <button data-down="${i}" class="btn-ghost w-8 h-8 rounded-lg text-sm" ${i===order.length-1?'disabled style="opacity:.3"':''}>↓</button>
+        <div class="drag-handle flex flex-col items-center justify-center" data-handle="${t}">
+          <div class="drag-bar"></div><div class="drag-bar"></div><div class="drag-bar"></div>
         </div>
       </div>
-    `).join('');
-    document.querySelectorAll('[data-up]').forEach(b => b.onclick = () => {
-      const i = +b.dataset.up; if (i===0) return;
-      [order[i-1], order[i]] = [order[i], order[i-1]];
-      state.settings.tabOrder = order; save(LS.settings, state.settings);
-      renderList(); renderBottomNav();
+    `;
+  }
+  function renderList() {
+    document.getElementById('order-list').innerHTML = order.map((t,i) => rowHtml(t,i)).join('');
+    attachHandlers();
+  }
+  function updateRowChrome() {
+    order.forEach((t,i) => {
+      const row = document.querySelector(`[data-tab-item="${t}"]`);
+      if (!row) return;
+      row.classList.toggle('opacity-60', i>=3);
+      row.querySelector('.order-num').textContent = i+1;
+      row.querySelector('.order-num').classList.toggle('text-brand', i<3);
+      row.querySelector('.order-num').classList.toggle('text-muted', i>=3);
+      row.querySelector('.order-badge').classList.toggle('hidden', i>=3);
     });
-    document.querySelectorAll('[data-down]').forEach(b => b.onclick = () => {
-      const i = +b.dataset.down; if (i===order.length-1) return;
-      [order[i+1], order[i]] = [order[i], order[i+1]];
-      state.settings.tabOrder = order; save(LS.settings, state.settings);
-      renderList(); renderBottomNav();
+  }
+  function attachHandlers() {
+    document.querySelectorAll('[data-handle]').forEach(handle => {
+      handle.onpointerdown = (e) => startDrag(e, handle.closest('.taborder-row'));
     });
+  }
+  let drag = null;
+  function startDrag(e, row) {
+    e.preventDefault();
+    const tab = row.dataset.tabItem;
+    const startIndex = order.indexOf(tab);
+    drag = { row, tab, startIndex, currentIndex: startIndex, startY: e.clientY, startTop: startIndex*(TABORDER_ROW_H+TABORDER_GAP), pointerId: e.pointerId };
+    row.setPointerCapture(e.pointerId);
+    row.classList.add('dragging');
+    document.addEventListener('pointermove', onDragMove);
+    document.addEventListener('pointerup', onDragEnd);
+  }
+  function onDragMove(e) {
+    if (!drag) return;
+    const delta = e.clientY - drag.startY;
+    const maxTop = (order.length-1)*(TABORDER_ROW_H+TABORDER_GAP);
+    const newTop = Math.min(Math.max(drag.startTop + delta, 0), maxTop);
+    drag.row.style.top = newTop + 'px';
+    const targetIndex = Math.round(newTop/(TABORDER_ROW_H+TABORDER_GAP));
+    if (targetIndex !== drag.currentIndex) {
+      order.splice(drag.currentIndex, 1);
+      order.splice(targetIndex, 0, drag.tab);
+      drag.currentIndex = targetIndex;
+      order.forEach((t,i) => {
+        if (t === drag.tab) return;
+        const r = document.querySelector(`[data-tab-item="${t}"]`);
+        if (r) r.style.top = i*(TABORDER_ROW_H+TABORDER_GAP) + 'px';
+      });
+      updateRowChrome();
+    }
+  }
+  function onDragEnd(e) {
+    if (!drag) return;
+    drag.row.style.top = drag.currentIndex*(TABORDER_ROW_H+TABORDER_GAP) + 'px';
+    drag.row.classList.remove('dragging');
+    try { drag.row.releasePointerCapture(drag.pointerId); } catch(err) {}
+    document.removeEventListener('pointermove', onDragMove);
+    document.removeEventListener('pointerup', onDragEnd);
+    if (drag.currentIndex !== drag.startIndex) {
+      state.settings.tabOrder = order; save(LS.settings, state.settings);
+      renderBottomNav();
+    }
+    drag = null;
   }
   renderList();
 };
@@ -2571,6 +2805,8 @@ async function init() {
   await initSupabaseAuth();
   if (!state.profile && !localStorage.getItem('fomoguard_onboarded')) {
     showWelcomeOverlay();
+  } else {
+    maybeShowTutorial();
   }
   if (localStorage.getItem('fomoguard_last_sync_date') !== todayStr()) {
     await refreshMarketData(false);
