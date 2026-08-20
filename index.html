@@ -1845,6 +1845,17 @@ function openTradeForm(h) {
   render();
 }
 
+const ASSET_TYPE_HINTS = {
+  satellite: ['레버리지','인버스','곱버스','2X','3X','테마','2차전지','메타버스','바이오','게임주','비트코인','이더리움','코인','BTC','ETH','스팩','SPAC','신규상장','IPO','공모주'],
+  core: ['코스피200','KODEX 200','TIGER 200','S&P500','SPY','QQQ','VOO','VTI','나스닥100','전체시장','인덱스','삼성전자','SK하이닉스','애플','AAPL','마이크로소프트','MSFT','구글','GOOGL','알파벳','아마존','AMZN','버크셔','BRK','국고채','회사채','머니마켓','MMF']
+};
+function suggestAssetType(name, ticker) {
+  const text = `${name} ${ticker}`.toUpperCase();
+  if (ASSET_TYPE_HINTS.satellite.some(k => text.includes(k.toUpperCase()))) return 'satellite';
+  if (ASSET_TYPE_HINTS.core.some(k => text.includes(k.toUpperCase()))) return 'core';
+  return null;
+}
+
 function openHoldingForm(existing) {
   const h = existing || { id:null, name:'', type:'core', currency:'KRW', avgPrice:'', quantity:'', currentPrice:'', ticker:'', exchange:'' };
   const isNew = !existing;
@@ -1853,6 +1864,7 @@ function openHoldingForm(existing) {
       <div><label class="text-xs text-muted mb-1 block">종목명</label><input id="hf-name" type="text" value="${escapeHtml(h.name)}" placeholder="예: 삼성전자"></div>
       <div><label class="text-xs text-muted mb-1 block">구분</label>
         <select id="hf-type"><option value="core" ${h.type==='core'?'selected':''}>코어 (핵심 장기보유)</option><option value="satellite" ${h.type==='satellite'?'selected':''}>위성 (전술적 비중)</option></select>
+        <p id="hf-type-hint" class="text-[10px] text-muted mt-1 hidden"></p>
       </div>
       <div><label class="text-xs text-muted mb-1 block">매수 통화 <span class="text-muted font-normal">— 실시간 환율로 원화 환산됩니다</span></label>
         <select id="hf-currency">
@@ -1894,6 +1906,25 @@ function openHoldingForm(existing) {
     if (v === 'KRX') curSel.value = 'KRW';
     else if (v === 'NASDAQ' || v === 'NYSE') curSel.value = 'USD';
   };
+  if (isNew) {
+    let typeTouchedByUser = false;
+    const typeSel = document.getElementById('hf-type');
+    const hint = document.getElementById('hf-type-hint');
+    typeSel.onchange = () => { typeTouchedByUser = true; hint.classList.add('hidden'); };
+    const applySuggestion = () => {
+      if (typeTouchedByUser) return;
+      const suggestion = suggestAssetType(document.getElementById('hf-name').value, document.getElementById('hf-ticker').value);
+      if (suggestion) {
+        typeSel.value = suggestion;
+        hint.textContent = `🤖 종목명으로 미루어 "${suggestion==='core'?'코어':'위성'}"을 추천드려요. 마음에 안 들면 직접 바꿔주세요.`;
+        hint.classList.remove('hidden');
+      } else {
+        hint.classList.add('hidden');
+      }
+    };
+    document.getElementById('hf-name').addEventListener('input', applySuggestion);
+    document.getElementById('hf-ticker').addEventListener('input', applySuggestion);
+  }
   document.getElementById('hf-save').onclick = () => {
     const name = document.getElementById('hf-name').value.trim();
     const type = document.getElementById('hf-type').value;
