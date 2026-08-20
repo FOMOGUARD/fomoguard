@@ -1102,7 +1102,7 @@ async function generateDailyAnalysis(silent) {
   const box = document.getElementById('daily-analysis-text');
   if (box) box.innerHTML = `<span class="inline-block spin">⏳</span> 분석 생성 중...`;
   const principlesText = state.principles.length ? state.principles.map(p=>`- [${p.source}] ${p.title}`).join('\n') : '(등록된 원칙 없음)';
-  const portfolioText = state.portfolio.length ? state.portfolio.map(h=>{ const ret = h.avgPrice>0?(h.currentPrice-h.avgPrice)/h.avgPrice*100:0; return `- ${h.name}(${h.type==='core'?'코어':'위성'}): ${fmtPct(ret)}`; }).join('\n') : '(보유 종목 없음)';
+  const portfolioText = state.portfolio.length ? state.portfolio.map(h=>{ const ret = h.avgPrice>0?(h.currentPrice-h.avgPrice)/h.avgPrice*100:0; return `- ${h.name}(${h.type==='core'?'코어':'알파'}): ${fmtPct(ret)}`; }).join('\n') : '(보유 종목 없음)';
   const marketText = state.marketSnapshot && state.marketSnapshot.items.length ? state.marketSnapshot.items.map(i=>`- ${i.label}: ${fmtPct(i.pct)}`).join('\n') : '(시장 지표 없음)';
   const realized = realizedSummary();
 
@@ -1392,7 +1392,7 @@ function renderTreemap() {
     }).join('');
     return `<p class="text-[11px] text-muted font-semibold mb-1">${label} · ${fmtWon(val)}</p><div class="relative mb-2" style="width:100%;height:${bandH}px">${tiles}</div>`;
   }
-  container.innerHTML = bandHtml(coreHoldings, coreVal, '🔵 코어', hCore) + bandHtml(satHoldings, satVal, '🟢 위성', hSat);
+  container.innerHTML = bandHtml(coreHoldings, coreVal, '🔵 코어', hCore) + bandHtml(satHoldings, satVal, '🟢 알파', hSat);
 }
 
 /* ================= DASHBOARD ================= */
@@ -1448,7 +1448,7 @@ renderers.dashboard = function() {
       <div class="row p-3"><p class="text-[10px] text-muted mb-1">총 매수금액</p><p class="text-sm font-bold">${fmtWon(totalCost)}</p></div>
       <div class="row p-3"><p class="text-[10px] text-muted mb-1">총 손익금액</p><p class="text-sm font-bold ${pnlColor}">${totalPnl>=0?'+':''}${fmtWon(totalPnl)}</p></div>
       <div class="row p-3"><p class="text-[10px] text-muted mb-1">코어 포트폴리오 수익률</p><p class="text-sm font-bold ${coreColor}">${coreCost>0?fmtPct(coreReturnPct):'-'}</p></div>
-      <div class="row p-3"><p class="text-[10px] text-muted mb-1">위성 포트폴리오 수익률</p><p class="text-sm font-bold ${satColor}">${satCost>0?fmtPct(satReturnPct):'-'}</p></div>
+      <div class="row p-3"><p class="text-[10px] text-muted mb-1">알파 포트폴리오 수익률</p><p class="text-sm font-bold ${satColor}">${satCost>0?fmtPct(satReturnPct):'-'}</p></div>
     </div>
     <button id="btn-refresh-market" class="text-[11px] text-brand font-semibold mb-4 flex items-center gap-1">🔄 환율·시세·지수·뉴스 새로고침</button>
 
@@ -1466,7 +1466,7 @@ renderers.dashboard = function() {
 
     ${hasData ? `
     <div class="card p-4 mb-3">
-      <p class="text-sm font-semibold mb-3">🗺️ 자산 트리맵 <span class="text-[11px] text-muted font-normal">· 코어/위성 · 크기=비중, 색=수익률</span></p>
+      <p class="text-sm font-semibold mb-3">🗺️ 자산 트리맵 <span class="text-[11px] text-muted font-normal">· 코어/알파 · 크기=비중, 색=수익률</span></p>
       <div id="treemap-wrap"></div>
     </div>
 
@@ -1477,7 +1477,7 @@ renderers.dashboard = function() {
         <div id="legend-donut" class="mt-2 space-y-1"></div>
       </div>
       <div class="card p-3">
-        <p class="text-xs font-semibold mb-2">코어 · 위성 비중</p>
+        <p class="text-xs font-semibold mb-2">코어 · 알파 비중</p>
         <canvas id="chart-core" height="140"></canvas>
         <div id="legend-core" class="mt-2 space-y-1"></div>
       </div>
@@ -1566,12 +1566,12 @@ renderers.dashboard = function() {
 
   chartCore = new Chart(document.getElementById('chart-core'), {
     type: 'doughnut',
-    data: { labels:['코어','위성'], datasets:[{ data:[coreValue, satValue], backgroundColor:['#3182f6','#00c896'], borderColor:'#141822', borderWidth:2 }] },
+    data: { labels:['코어','알파'], datasets:[{ data:[coreValue, satValue], backgroundColor:['#3182f6','#00c896'], borderColor:'#141822', borderWidth:2 }] },
     options: { plugins: { legend: { display:false } } }
   });
   document.getElementById('legend-core').innerHTML = `
     <div class="flex items-center gap-1.5 text-[10px]"><span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#3182f6"></span><span class="flex-1">코어</span><span class="text-muted">${totalValue>0?Math.round(coreValue/totalValue*100):0}%</span></div>
-    <div class="flex items-center gap-1.5 text-[10px]"><span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#00c896"></span><span class="flex-1">위성</span><span class="text-muted">${totalValue>0?Math.round(satValue/totalValue*100):0}%</span></div>
+    <div class="flex items-center gap-1.5 text-[10px]"><span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#00c896"></span><span class="flex-1">알파</span><span class="text-muted">${totalValue>0?Math.round(satValue/totalValue*100):0}%</span></div>
   `;
 
   if (state.snapshots.length > 1) {
@@ -1652,7 +1652,7 @@ async function runFactCheck() {
     ? state.principles.map(p => `- [${p.source}] ${p.title}: ${p.body.replace(/\n/g,' ')}`).join('\n')
     : '(등록된 원칙 없음 — 일반적인 건전 투자 원칙 기준으로 판단할 것)';
   const portfolioText = state.portfolio.length
-    ? state.portfolio.map(h => `- ${h.name}(${h.type==='core'?'코어':'위성'}): 평가금액 ${Math.round(holdingKRW(h).value).toLocaleString()}원`).join('\n')
+    ? state.portfolio.map(h => `- ${h.name}(${h.type==='core'?'코어':'알파'}): 평가금액 ${Math.round(holdingKRW(h).value).toLocaleString()}원`).join('\n')
     : '(등록된 보유 종목 없음)';
   const recentJournal = state.journal.slice(-3).map(j => `- ${j.date}: ${j.content.slice(0,80)}`).join('\n') || '(기록 없음)';
 
@@ -1727,7 +1727,7 @@ renderers.portfolio = function() {
     </div>
     <div class="flex items-center justify-between mb-3">
       <div class="seg w-40" id="pf-seg">
-        <button data-f="all">전체</button><button data-f="core">코어</button><button data-f="satellite">위성</button>
+        <button data-f="all">전체</button><button data-f="core">코어</button><button data-f="satellite">알파</button>
       </div>
       <button id="btn-sync-price" class="text-xs text-brand font-semibold flex items-center gap-1">🔄 시세 새로고침</button>
     </div>
@@ -1753,7 +1753,7 @@ renderers.portfolio = function() {
       return `<div class="card p-4">
         <div class="flex items-start justify-between">
           <div>
-            <p class="font-semibold text-sm">${escapeHtml(h.name)} <span class="badge ${h.type==='core'?'bg-brand/15 text-brand':'bg-good/15 text-good'}">${h.type==='core'?'코어':'위성'}</span></p>
+            <p class="font-semibold text-sm">${escapeHtml(h.name)} <span class="badge ${h.type==='core'?'bg-brand/15 text-brand':'bg-good/15 text-good'}">${h.type==='core'?'코어':'알파'}</span></p>
             <p class="text-xs text-muted mt-1">${h.quantity}주 · 평단 ${fmtPrice(h.avgPrice,cur)} · 현재가 ${fmtPrice(h.currentPrice,cur)}</p>
             ${h.ticker ? `<p class="text-[10px] text-muted mt-0.5">${escapeHtml(h.ticker)}${h.exchange?' · '+h.exchange:''} · 시세 ${timeAgo(h.priceUpdatedAt)} 갱신</p>` : ''}
           </div>
@@ -1863,7 +1863,7 @@ function openHoldingForm(existing) {
     <div class="space-y-3">
       <div><label class="text-xs text-muted mb-1 block">종목명</label><input id="hf-name" type="text" value="${escapeHtml(h.name)}" placeholder="예: 삼성전자"></div>
       <div><label class="text-xs text-muted mb-1 block">구분</label>
-        <select id="hf-type"><option value="core" ${h.type==='core'?'selected':''}>코어 (핵심 장기보유)</option><option value="satellite" ${h.type==='satellite'?'selected':''}>위성 (전술적 비중)</option></select>
+        <select id="hf-type"><option value="core" ${h.type==='core'?'selected':''}>코어 (핵심 장기보유)</option><option value="satellite" ${h.type==='satellite'?'selected':''}>알파 (전술적 비중)</option></select>
         <p id="hf-type-hint" class="text-[10px] text-muted mt-1 hidden"></p>
       </div>
       <div><label class="text-xs text-muted mb-1 block">매수 통화 <span class="text-muted font-normal">— 실시간 환율로 원화 환산됩니다</span></label>
@@ -1916,7 +1916,7 @@ function openHoldingForm(existing) {
       const suggestion = suggestAssetType(document.getElementById('hf-name').value, document.getElementById('hf-ticker').value);
       if (suggestion) {
         typeSel.value = suggestion;
-        hint.textContent = `🤖 종목명으로 미루어 "${suggestion==='core'?'코어':'위성'}"을 추천드려요. 마음에 안 들면 직접 바꿔주세요.`;
+        hint.textContent = `🤖 종목명으로 미루어 "${suggestion==='core'?'코어':'알파'}"을 추천드려요. 마음에 안 들면 직접 바꿔주세요.`;
         hint.classList.remove('hidden');
       } else {
         hint.classList.add('hidden');
