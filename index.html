@@ -140,7 +140,8 @@ const LS = {
   dailyAnalysis: 'fomoguard_daily_analysis',
   newsKeywords: 'fomoguard_news_keywords',
   newsCache: 'fomoguard_news_cache',
-  profile: 'fomoguard_profile'
+  profile: 'fomoguard_profile',
+  cashFlows: 'fomoguard_cash_flows'
 };
 function load(key, fallback) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch(e) { return fallback; } }
 function save(key, val) { localStorage.setItem(key, JSON.stringify(val)); if (typeof SYNCABLE_KEYS !== 'undefined' && SYNCABLE_KEYS.has(key)) scheduleCloudSync(); }
@@ -204,6 +205,7 @@ let state = {
   dailyAnalysis: load(LS.dailyAnalysis, null),
   newsKeywords: load(LS.newsKeywords, []),
   newsCache: load(LS.newsCache, {}),
+  cashFlows: load(LS.cashFlows, []),
   profile: load(LS.profile, null),
   settings: load(LS.settings, { provider:'claude', apiKeys:{claude:'',gemini:'',openai:'',grok:''}, models:{claude:'claude-sonnet-5',gemini:'gemini-3.6-flash',openai:'gpt-4.1',grok:'grok-4'}, twelveDataKey:'', newsApiKey:'', tabOrder: REORDERABLE.slice() })
 };
@@ -293,7 +295,7 @@ const SUPABASE_ANON_KEY = 'sb_publishable_4raTyA00kKvm_rSveM336w_uncSPaNA';
 function isSupabaseConfigured() { return !SUPABASE_URL.includes('YOUR-PROJECT') && !SUPABASE_ANON_KEY.includes('YOUR-ANON'); }
 let supabaseClient = null;
 let currentUser = null;
-const SYNCABLE_KEYS = new Set([LS.principles, LS.portfolio, LS.journal, LS.transactions, LS.factchecks, LS.snapshots, LS.newsKeywords]);
+const SYNCABLE_KEYS = new Set([LS.principles, LS.portfolio, LS.journal, LS.transactions, LS.factchecks, LS.snapshots, LS.newsKeywords, LS.cashFlows]);
 let cloudSyncTimer = null;
 function scheduleCloudSync() {
   if (!supabaseClient || !currentUser) return;
@@ -302,7 +304,7 @@ function scheduleCloudSync() {
 }
 async function pushToCloud() {
   if (!supabaseClient || !currentUser) return;
-  const payload = { principles: state.principles, portfolio: state.portfolio, journal: state.journal, transactions: state.transactions, factchecks: state.factchecks, snapshots: state.snapshots, newsKeywords: state.newsKeywords };
+  const payload = { principles: state.principles, portfolio: state.portfolio, journal: state.journal, transactions: state.transactions, factchecks: state.factchecks, snapshots: state.snapshots, newsKeywords: state.newsKeywords, cashFlows: state.cashFlows };
   const { error } = await supabaseClient.from('fomoguard_data').upsert({ user_id: currentUser.id, data: payload, updated_at: new Date().toISOString() });
   if (!error) localStorage.setItem('fomoguard_last_cloud_sync', String(Date.now()));
 }
@@ -318,6 +320,7 @@ async function pullFromCloud() {
     if (d.factchecks) { state.factchecks = d.factchecks; save(LS.factchecks, state.factchecks); }
     if (d.snapshots) { state.snapshots = d.snapshots; save(LS.snapshots, state.snapshots); }
     if (d.newsKeywords) { state.newsKeywords = d.newsKeywords; save(LS.newsKeywords, state.newsKeywords); }
+    if (d.cashFlows) { state.cashFlows = d.cashFlows; save(LS.cashFlows, state.cashFlows); }
     localStorage.setItem('fomoguard_last_cloud_sync', String(Date.now()));
     if (renderers[currentTab]) renderers[currentTab]();
   } else {
@@ -867,14 +870,16 @@ function holdingKRW(h) {
   return { value: h.quantity*h.currentPrice*factor, cost: h.quantity*h.avgPrice*factor };
 }
 function computePortfolioStats() {
-  let totalValue=0, totalCost=0, coreValue=0, satValue=0;
+  let totalValue=0, totalCost=0, coreValue=0, satValue=0, coreCost=0, satCost=0;
   state.portfolio.forEach(h => {
     const { value, cost } = holdingKRW(h);
     totalValue += value; totalCost += cost;
-    if (h.type === 'core') coreValue += value; else satValue += value;
+    if (h.type === 'core') { coreValue += value; coreCost += cost; } else { satValue += value; satCost += cost; }
   });
   const returnPct = totalCost>0 ? (totalValue-totalCost)/totalCost*100 : 0;
-  return { totalValue, totalCost, coreValue, satValue, returnPct };
+  const coreReturnPct = coreCost>0 ? (coreValue-coreCost)/coreCost*100 : 0;
+  const satReturnPct = satCost>0 ? (satValue-satCost)/satCost*100 : 0;
+  return { totalValue, totalCost, coreValue, satValue, coreCost, satCost, returnPct, coreReturnPct, satReturnPct };
 }
 function realizedSummary() {
   let pnl=0, costBasis=0;
@@ -884,6 +889,20 @@ function realizedSummary() {
     costBasis += t.avgPriceAtTime*t.quantity*factor;
   });
   return { pnl, costBasis };
+}
+function computeCashBalance() { return state.cashFlows.reduce((s,c)=>s+c.amountKRW, 0); }
+function recordCashFlow(type, amountKRW, note, date) {
+  state.cashFlows.push({ id: uid(), date: date || todayStr(), ts: Date.now(), type, amountKRW, note: note || '' });
+  save(LS.cashFlows, state.cashFlows);
+}
+function computeTotalPnl() {
+  const { totalValue, totalCost } = computePortfolioStats();
+  const realized = realizedSummary();
+  const unrealizedPnl = totalValue - totalCost;
+  const totalPnl = unrealizedPnl + realized.pnl;
+  const totalDeployedCost = totalCost + realized.costBasis;
+  const totalPnlPct = totalDeployedCost>0 ? totalPnl/totalDeployedCost*100 : 0;
+  return { unrealizedPnl, realizedPnl: realized.pnl, totalPnl, totalDeployedCost, totalPnlPct };
 }
 function holdingRealizedPnL(holdingId) {
   let sum = 0;
@@ -1204,24 +1223,26 @@ function renderTreemap() {
 let chartDonut, chartCore, chartTrend;
 renderers.dashboard = function() {
   const el = document.getElementById('panel-dashboard');
-  const { totalValue, totalCost, coreValue, satValue, returnPct } = computePortfolioStats();
-  const realized = realizedSummary();
-  const returnColor = returnPct > 0 ? 'text-up' : returnPct < 0 ? 'text-down' : 'text-muted';
-  const arrow = returnPct > 0 ? '▲' : returnPct < 0 ? '▼' : '';
+  const { totalValue, totalCost, coreValue, satValue, coreReturnPct, satReturnPct, coreCost, satCost } = computePortfolioStats();
+  const { totalPnl, totalPnlPct } = computeTotalPnl();
+  const cashBalance = computeCashBalance();
+  const totalAssets = totalValue + cashBalance;
+  const pnlColor = totalPnlPct > 0 ? 'text-up' : totalPnlPct < 0 ? 'text-down' : 'text-muted';
+  const arrow = totalPnlPct > 0 ? '▲' : totalPnlPct < 0 ? '▼' : '';
   const hasData = state.portfolio.length > 0;
-  const unrealizedPnl = totalValue - totalCost;
-  const totalPnl = unrealizedPnl + realized.pnl;
   const lastFc = state.factchecks[state.factchecks.length-1];
   const todayJournal = state.journal.find(j=>j.date===todayStr());
   const q = quoteOfTheDay();
+  const coreColor = coreReturnPct>0?'text-up':coreReturnPct<0?'text-down':'text-muted';
+  const satColor = satReturnPct>0?'text-up':satReturnPct<0?'text-down':'text-muted';
 
   el.innerHTML = `
     <div class="hero-card rounded-[26px] p-5 mt-2 mb-3">
       <p class="text-xs text-muted mb-1.5">총 평가 자산 (원화 기준)</p>
-      <p class="text-[32px] font-extrabold leading-tight tracking-tight">${fmtWon(totalValue)}</p>
+      <p class="text-[32px] font-extrabold leading-tight tracking-tight">${fmtWon(totalAssets)}</p>
       ${hasData ? `<div class="flex items-center gap-1.5 mt-1.5">
-        <span class="badge ${returnPct>0?'bg-up/15 text-up':returnPct<0?'bg-down/15 text-down':'bg-line text-muted'}">${arrow} ${fmtPct(returnPct)}</span>
-        <span class="text-xs ${returnColor} font-semibold">${unrealizedPnl>=0?'+':''}${fmtWon(unrealizedPnl)}</span>
+        <span class="badge ${totalPnlPct>0?'bg-up/15 text-up':totalPnlPct<0?'bg-down/15 text-down':'bg-line text-muted'}">${arrow} ${fmtPct(totalPnlPct)}</span>
+        <span class="text-xs ${pnlColor} font-semibold">${totalPnl>=0?'+':''}${fmtWon(totalPnl)}</span>
       </div>` : `<p class="text-xs text-muted mt-1.5">포트폴리오 탭에서 보유 종목을 추가해보세요</p>`}
     </div>
 
@@ -1231,16 +1252,18 @@ renderers.dashboard = function() {
     </div>
 
     <div class="grid grid-cols-2 gap-2 mb-3">
-      <div class="row p-3"><p class="text-[10px] text-muted mb-1">총 매수금액</p><p class="text-sm font-bold">${fmtWon(totalCost)}</p></div>
-      <div class="row p-3"><p class="text-[10px] text-muted mb-1">평가손익 (미실현)</p><p class="text-sm font-bold ${unrealizedPnl>=0?'text-up':'text-down'}">${unrealizedPnl>=0?'+':''}${fmtWon(unrealizedPnl)}</p></div>
-      <div class="row p-3"><p class="text-[10px] text-muted mb-1">실현손익 (매도 확정)</p><p class="text-sm font-bold ${realized.pnl>=0?'text-up':'text-down'}">${realized.pnl>=0?'+':''}${fmtWon(realized.pnl)}</p></div>
-      <div class="row p-3"><p class="text-[10px] text-muted mb-1">총손익 (평가+실현)</p><p class="text-sm font-bold ${totalPnl>=0?'text-up':'text-down'}">${totalPnl>=0?'+':''}${fmtWon(totalPnl)}</p></div>
       <button id="cell-fx" class="row p-3 text-left">
-        <p class="text-[10px] text-muted mb-1">환율(USD/KRW)</p>
+        <p class="text-[10px] text-muted mb-1">실시간 환율(USD/KRW)</p>
         <p class="text-sm font-bold">${state.fx.rate ? Math.round(state.fx.rate).toLocaleString()+'원' : '-'}</p>
         <p class="text-[9px] text-muted mt-0.5">${timeAgo(state.fx.updatedAt)} 갱신</p>
       </button>
-      <div class="row p-3"><p class="text-[10px] text-muted mb-1">총 수익률 (보유중)</p><p class="text-sm font-bold ${returnColor}">${hasData?fmtPct(returnPct):'-'}</p></div>
+      <button id="cell-cash" class="row p-3 text-left">
+        <p class="text-[10px] text-muted mb-1">현금 잔고</p>
+        <p class="text-sm font-bold">${fmtWon(cashBalance)}</p>
+      </button>
+      <div class="row p-3"><p class="text-[10px] text-muted mb-1">총 매수금액</p><p class="text-sm font-bold">${fmtWon(totalCost)}</p></div>
+      <div class="row p-3"><p class="text-[10px] text-muted mb-1">코어 포트폴리오 수익률</p><p class="text-sm font-bold ${coreColor}">${coreCost>0?fmtPct(coreReturnPct):'-'}</p></div>
+      <div class="row p-3 col-span-2"><p class="text-[10px] text-muted mb-1">위성 포트폴리오 수익률</p><p class="text-sm font-bold ${satColor}">${satCost>0?fmtPct(satReturnPct):'-'}</p></div>
     </div>
     <button id="btn-refresh-market" class="text-[11px] text-brand font-semibold mb-4 flex items-center gap-1">🔄 환율·시세·지수·뉴스 새로고침</button>
 
@@ -1311,6 +1334,7 @@ renderers.dashboard = function() {
   `;
   el.querySelectorAll('[data-goto]').forEach(b => b.onclick = () => switchTab(b.dataset.goto));
   document.getElementById('cell-fx').onclick = () => refreshMarketData(true);
+  document.getElementById('cell-cash').onclick = () => openCashFlowModal();
   document.getElementById('btn-refresh-market').onclick = () => refreshMarketData(true);
   document.getElementById('btn-daily-analysis').onclick = () => generateDailyAnalysis(false);
 
@@ -1607,9 +1631,11 @@ function openTradeForm(h) {
         const newAvg = (h.quantity*h.avgPrice + qty*price)/newQty;
         h.quantity = newQty; h.avgPrice = newAvg; h.currentPrice = price;
         state.transactions.push({ id:uid(), date:todayStr(), holdingId:h.id, name:h.name, ticker:h.ticker, type:'buy', currency:cur, quantity:qty, price, avgPriceAtTime:newAvg, realizedPnL:null });
+        recordCashFlow('buy', -(qty*price*(cur==='USD'?(state.fx.rate||1):1)), `${h.name} 매수`);
       } else {
         const pnl = (price-h.avgPrice)*qty;
         state.transactions.push({ id:uid(), date:todayStr(), holdingId:h.id, name:h.name, ticker:h.ticker, type:'sell', currency:cur, quantity:qty, price, avgPriceAtTime:h.avgPrice, realizedPnL:pnl });
+        recordCashFlow('sell', qty*price*(cur==='USD'?(state.fx.rate||1):1), `${h.name} 매도`);
         h.quantity -= qty; h.currentPrice = price;
         if (h.quantity <= 0) { state.portfolio = state.portfolio.filter(x=>x.id!==h.id); }
       }
@@ -1686,12 +1712,50 @@ function openHoldingForm(existing) {
       state.portfolio.push(newHolding);
       state.transactions.push({ id: uid(), date: todayStr(), holdingId:newHolding.id, name, ticker, type:'buy', currency, quantity:qty, price:avg, avgPriceAtTime:avg, realizedPnL:null });
       save(LS.transactions, state.transactions);
+      recordCashFlow('buy', -(qty*avg*(currency==='USD'?(state.fx.rate||1):1)), `${name} 최초 매수`);
     } else {
       Object.assign(existing, { name, type, currency, currentPrice:cur, ticker, exchange });
     }
     save(LS.portfolio, state.portfolio);
     snapshotToday();
     closeModal(); renderers.portfolio(); toast('저장되었습니다.', 'success');
+  };
+}
+
+function openCashFlowModal() {
+  const balance = computeCashBalance();
+  const history = [...state.cashFlows].sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,10);
+  const typeLabel = { deposit:'입금', buy:'매수', sell:'매도' };
+  openModal('현금 잔고', `
+    <div class="row p-3 mb-4 text-center">
+      <p class="text-[10px] text-muted mb-1">현재 현금 잔고</p>
+      <p class="text-xl font-extrabold">${fmtWon(balance)}</p>
+    </div>
+    <div class="space-y-3 mb-4">
+      <div><label class="text-xs text-muted mb-1 block">입금액 (원)</label><input id="cf-amount" type="number" placeholder="예: 1000000"></div>
+      <div><label class="text-xs text-muted mb-1 block">메모 (선택)</label><input id="cf-note" type="text" placeholder="예: 8월 정기 입금"></div>
+    </div>
+    <button id="cf-submit" class="btn-brand w-full py-3 rounded-xl text-sm font-bold mb-4">입금 기록</button>
+    <p class="text-xs font-semibold mb-2">최근 내역</p>
+    <div class="space-y-1.5 max-h-48 overflow-y-auto">
+      ${history.length ? history.map(c => `
+        <div class="row p-2.5 flex items-center justify-between text-xs">
+          <div><span class="font-semibold">${typeLabel[c.type]||c.type}</span> <span class="text-muted">${escapeHtml(c.date)}${c.note?' · '+escapeHtml(c.note):''}</span></div>
+          <span class="font-bold ${c.amountKRW>=0?'text-up':'text-down'}">${c.amountKRW>=0?'+':''}${fmtWon(c.amountKRW)}</span>
+        </div>
+      `).join('') : '<p class="text-xs text-muted text-center py-3">내역이 없습니다.</p>'}
+    </div>
+  `, `
+    <button class="btn-ghost px-4 py-2.5 rounded-xl text-sm w-full" onclick="closeModal()">닫기</button>
+  `);
+  document.getElementById('cf-submit').onclick = () => {
+    const amount = +document.getElementById('cf-amount').value;
+    const note = document.getElementById('cf-note').value.trim();
+    if (!amount || amount<=0) { toast('입금액을 올바르게 입력해주세요.', 'warn'); return; }
+    recordCashFlow('deposit', amount, note);
+    toast('입금을 기록했습니다.', 'success');
+    if (currentTab === 'dashboard') renderers.dashboard();
+    openCashFlowModal();
   };
 }
 
@@ -2136,7 +2200,7 @@ renderers.settings = function() {
   };
   document.getElementById('btn-goto-taborder').onclick = () => switchTab('taborder');
   document.getElementById('st-export').onclick = () => {
-    const payload = { principles: state.principles, portfolio: state.portfolio, journal: state.journal, transactions: state.transactions, factchecks: state.factchecks, snapshots: state.snapshots, newsKeywords: state.newsKeywords, exportedAt: new Date().toISOString() };
+    const payload = { principles: state.principles, portfolio: state.portfolio, journal: state.journal, transactions: state.transactions, factchecks: state.factchecks, snapshots: state.snapshots, newsKeywords: state.newsKeywords, cashFlows: state.cashFlows, exportedAt: new Date().toISOString() };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -2158,6 +2222,7 @@ renderers.settings = function() {
         if (data.factchecks) { state.factchecks = data.factchecks; save(LS.factchecks, state.factchecks); }
         if (data.snapshots) { state.snapshots = data.snapshots; save(LS.snapshots, state.snapshots); }
         if (data.newsKeywords) { state.newsKeywords = data.newsKeywords; save(LS.newsKeywords, state.newsKeywords); }
+        if (data.cashFlows) { state.cashFlows = data.cashFlows; save(LS.cashFlows, state.cashFlows); }
         toast('데이터를 복원했습니다.', 'success');
         switchTab('dashboard');
       } catch (err) { toast('파일을 읽을 수 없습니다.', 'error'); }
@@ -2168,7 +2233,7 @@ renderers.settings = function() {
     confirmModal('정말 초기화할까요?', '이 작업은 되돌릴 수 없습니다. 초기화 전 백업을 권장합니다.', () => {
       Object.values(LS).forEach(k => k !== LS.settings && localStorage.removeItem(k));
       localStorage.removeItem('fomoguard_last_sync_date');
-      state.principles = []; state.portfolio = []; state.journal = []; state.transactions = []; state.factchecks = []; state.snapshots = [];
+      state.principles = []; state.portfolio = []; state.journal = []; state.transactions = []; state.factchecks = []; state.snapshots = []; state.cashFlows = [];
       state.fx = { rate:null, updatedAt:null }; state.marketSnapshot = null; state.dailyAnalysis = null; state.newsKeywords = []; state.newsCache = {}; state.profile = null;
       renderHeaderProfile();
       switchTab('dashboard'); toast('모든 데이터를 초기화했습니다.');
