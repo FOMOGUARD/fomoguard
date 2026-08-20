@@ -5,7 +5,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>투자워워 | InvestWowo</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%9B%A1%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/png" sizes="192x192" href="/mascot/icon-192.png">
+<link rel="apple-touch-icon" href="/mascot/icon-192.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
@@ -555,7 +556,7 @@ function retColor(ret) {
   return '#2563d9';
 }
 function quoteOfTheDay() {
-  const pool = [...MARKET_QUOTES, ...MEME_QUOTES];
+  const pool = [...MARKET_QUOTES, ...MEME_QUOTES, ...MOVIE_QUOTES];
   return pool[Math.floor(Math.random()*pool.length)];
 }
 
@@ -830,6 +831,28 @@ const MEME_QUOTES = [
   { text: '내 종목만 안 오른다는 착각의 반대편에도 똑같이 생각하는 사람이 있다', who:'투자 커뮤니티 자조 개그' },
   { text: '"오늘만 사고 끝"이라는 다짐은 내일이면 다시 새로 생긴다', who:'투자 커뮤니티 자조 개그' }
 ];
+/* ================= 명대사 패러디 (영화·드라마 명대사를 투자 상황에 각색) ================= */
+const MOVIE_QUOTES = [
+  { text: '어이 개미 친구, 개미답게 행동해', who:'영화 <타짜> 명대사 패러디', mood:'warn' },
+  { text: '이러다 계좌 다 죽어', who:'영화 <부산행> 명대사 패러디', mood:'warn' },
+  { text: 'You shall not 몰빵!', who:'영화 <반지의 제왕> 명대사 패러디', mood:'warn' },
+  { text: '지금까지 이런 수익률은 없었다, 방심하는 순간 사라진다', who:'영화 <극한직업> 명대사 패러디', mood:'warn' },
+  { text: '예쁘게 세워놓은 원칙을 감정이 다 망쳐놨다', who:'영화 <도둑들> 명대사 패러디', mood:'warn' },
+  { text: '"너는 계획이 다 있구나"라는 착각이 제일 위험하다', who:'영화 <기생충> 명대사 패러디', mood:'warn' },
+  { text: '뭣이 중헌디, 원칙이 중허지', who:'영화 <곡성> 명대사 패러디', mood:'warn' },
+  { text: '제겐 아직 원칙이 열두 개나 남아있습니다', who:'영화 <명량> 명대사 패러디', mood:'good' },
+  { text: '우리가 돈이 없지 원칙이 없냐', who:'영화 <베테랑> 명대사 패러디', mood:'good' },
+  { text: '우리는 원칙을 찾을 것이다, 늘 그랬듯이', who:'영화 <인터스텔라> 명대사 패러디', mood:'good' },
+  { text: '원칙을 굽히지 않아', who:'드라마 <이태원 클라쓰> 명대사 패러디', mood:'good' },
+  { text: '존버, 살아있네', who:'영화 <범죄와의 전쟁> 명대사 패러디', mood:'neutral' },
+  { text: '나는 차트만 보았지, 시장의 흐름은 보지 못했다', who:'영화 <관상> 명대사 패러디', mood:'neutral' },
+  { text: '이 시장에서 내가 어떤 존재인지, 개미라는 걸 잊지 말자', who:'드라마 <미생> 명대사 패러디', mood:'neutral' }
+];
+function pickMovieQuote(mood) {
+  const pool = MOVIE_QUOTES.filter(q => q.mood === mood);
+  const from = pool.length ? pool : MOVIE_QUOTES;
+  return from[Math.floor(Math.random()*from.length)];
+}
 
 /* ================= 투자 나침반 (온보딩 성향 진단) ================= */
 const COMPASS_QUESTIONS = [
@@ -1423,8 +1446,9 @@ renderers.dashboard = function() {
         <p class="text-sm font-bold">${fmtWon(cashBalance)}</p>
       </button>
       <div class="row p-3"><p class="text-[10px] text-muted mb-1">총 매수금액</p><p class="text-sm font-bold">${fmtWon(totalCost)}</p></div>
+      <div class="row p-3"><p class="text-[10px] text-muted mb-1">총 손익금액</p><p class="text-sm font-bold ${pnlColor}">${totalPnl>=0?'+':''}${fmtWon(totalPnl)}</p></div>
       <div class="row p-3"><p class="text-[10px] text-muted mb-1">코어 포트폴리오 수익률</p><p class="text-sm font-bold ${coreColor}">${coreCost>0?fmtPct(coreReturnPct):'-'}</p></div>
-      <div class="row p-3 col-span-2"><p class="text-[10px] text-muted mb-1">위성 포트폴리오 수익률</p><p class="text-sm font-bold ${satColor}">${satCost>0?fmtPct(satReturnPct):'-'}</p></div>
+      <div class="row p-3"><p class="text-[10px] text-muted mb-1">위성 포트폴리오 수익률</p><p class="text-sm font-bold ${satColor}">${satCost>0?fmtPct(satReturnPct):'-'}</p></div>
     </div>
     <button id="btn-refresh-market" class="text-[11px] text-brand font-semibold mb-4 flex items-center gap-1">🔄 환율·시세·지수·뉴스 새로고침</button>
 
@@ -1593,12 +1617,19 @@ renderers.factcheck = function() {
   hist.innerHTML = items.length===0 ? '<p class="text-xs text-muted">아직 기록이 없습니다.</p>' : items.map(f => {
     const v = f.result?.verdict || '오류';
     const color = v==='위배' ? 'text-bad' : v==='주의' ? 'text-warn' : v==='양호' ? 'text-good' : 'text-muted';
-    return `<div class="row p-3.5 flex items-center justify-between text-sm">
+    return `<button data-fcid="${escapeHtml(f.id)}" class="row p-3.5 flex items-center justify-between text-sm w-full text-left">
       <div><span class="font-semibold">${escapeHtml(f.ticker)}</span> <span class="text-xs text-muted">${f.date}</span></div>
       <span class="font-bold ${color}">${escapeHtml(v)}</span>
-    </div>`;
+    </button>`;
   }).join('');
+  hist.querySelectorAll('[data-fcid]').forEach(b => b.onclick = () => showFactCheckHistoryItem(b.dataset.fcid));
 };
+function showFactCheckHistoryItem(id) {
+  const record = state.factchecks.find(f => f.id === id);
+  if (!record || !record.result) return;
+  renderFactCheckResult(record.result, record);
+  document.getElementById('fc-result').scrollIntoView({ behavior:'smooth', block:'start' });
+}
 
 function verdictStyle(v) {
   if (v === '위배') return { color:'text-bad', bg:'bg-bad/10', border:'border-bad/30', emoji:'🚫', mascot:'face-D' };
@@ -1614,7 +1645,7 @@ async function runFactCheck() {
   if (!canUseAI()) { toast('무료 AI를 쓰려면 Google 로그인을 해주세요. (또는 설정에서 본인 API 키 등록)', 'error'); switchTab('settings'); return; }
 
   const resultBox = document.getElementById('fc-result');
-  resultBox.innerHTML = `<div class="card p-6 text-center text-sm text-muted"><span class="inline-block spin">⏳</span> AI가 원칙을 대조하는 중...</div>`;
+  resultBox.innerHTML = `<div class="card p-6 text-center text-sm text-muted"><img src="/mascot/pose-detective.png" alt="" class="w-16 mx-auto mb-2 opacity-90"><br>AI가 원칙을 대조하는 중...</div>`;
 
   const stats = computePortfolioStats();
   const principlesText = state.principles.length
@@ -1641,7 +1672,7 @@ async function runFactCheck() {
     save(LS.factchecks, state.factchecks);
 
     renderers.factcheck();
-    renderFactCheckResult(result);
+    renderFactCheckResult(result, record);
   } catch (err) {
     resultBox.innerHTML = `<div class="card p-5 border border-bad/30 text-sm">
       <p class="font-semibold text-bad mb-1">검증 실패</p>
@@ -1652,11 +1683,16 @@ async function runFactCheck() {
   }
 }
 
-function renderFactCheckResult(result) {
+function renderFactCheckResult(result, record) {
   const box = document.getElementById('fc-result');
   if (!box) return;
   const s = verdictStyle(result.verdict);
+  const mq = pickMovieQuote(result.verdict === '양호' ? 'good' : 'warn');
   box.innerHTML = `
+    ${record ? `<div class="row p-3 mb-2 text-xs">
+      <p><span class="font-semibold">${escapeHtml(record.ticker)}</span> <span class="text-muted">· ${escapeHtml(record.date)}${record.amount?' · '+fmtWon(record.amount):''}</span></p>
+      <p class="text-muted mt-1">"${escapeHtml(record.reason)}"</p>
+    </div>` : ''}
     <div class="card p-5 border ${s.border} ${s.bg} fade-in">
       <div class="flex items-center gap-3 mb-3">
         <img src="/mascot/${s.mascot}.png" alt="" class="w-12 h-12 object-contain flex-shrink-0">
@@ -1674,6 +1710,7 @@ function renderFactCheckResult(result) {
         <p class="text-xs text-muted mb-1">💡 조언</p>
         <p class="text-sm">${escapeHtml(result.advice||'')}</p>
       </div>
+      <p class="text-[11px] text-muted italic mt-3">🎬 "${escapeHtml(mq.text)}" — ${escapeHtml(mq.who)}</p>
     </div>
   `;
 }
@@ -1961,7 +1998,7 @@ renderers.principles = function() {
   `;
   const list = document.getElementById('principle-list');
   if (state.principles.length === 0) {
-    list.innerHTML = `<div class="card p-8 text-center text-sm text-muted">아직 등록된 투자 원칙이 없습니다.<br>투자 나침반으로 시작하거나, 직접 작성 · 대가 템플릿을 불러와보세요.</div>`;
+    list.innerHTML = `<div class="card p-8 text-center text-sm text-muted"><img src="/mascot/pose-point.png" alt="" class="w-20 mx-auto mb-3">아직 등록된 투자 원칙이 없습니다.<br>투자 나침반으로 시작하거나, 직접 작성 · 대가 템플릿을 불러와보세요.</div>`;
   } else {
     list.innerHTML = state.principles.map(pr => `
       <div class="card p-4">
