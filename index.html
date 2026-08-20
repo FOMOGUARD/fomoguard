@@ -209,7 +209,7 @@ let state = {
   profile: load(LS.profile, null),
   settings: load(LS.settings, { provider:'claude', apiKeys:{claude:'',gemini:'',openai:'',grok:''}, models:{claude:'claude-sonnet-5',gemini:'gemini-3.6-flash',openai:'gpt-4.1',grok:'grok-4'}, twelveDataKey:'', newsApiKey:'', tabOrder: REORDERABLE.slice() })
 };
-(function sanitizeSettings() {
+function sanitizeSettings() {
   let order = (state.settings.tabOrder || []).filter(t => REORDERABLE.includes(t));
   REORDERABLE.forEach(t => { if (!order.includes(t)) order.push(t); });
   state.settings.tabOrder = order;
@@ -217,7 +217,9 @@ let state = {
   if (!state.settings.models) state.settings.models = { claude: state.settings.model || 'claude-sonnet-5', gemini:'gemini-3.6-flash', openai:'gpt-4.1', grok:'grok-4' };
   if (!state.settings.provider) state.settings.provider = 'claude';
   if (state.settings.newsApiKey === undefined) state.settings.newsApiKey = state.settings.marketauxKey || '';
-})();
+  if (state.settings.twelveDataKey === undefined) state.settings.twelveDataKey = '';
+}
+sanitizeSettings();
 function hasApiKey() { return !!(state.settings.apiKeys||{})[state.settings.provider]; }
 function canUseAI() { return hasApiKey() || !!currentUser; }
 
@@ -295,7 +297,7 @@ const SUPABASE_ANON_KEY = 'sb_publishable_4raTyA00kKvm_rSveM336w_uncSPaNA';
 function isSupabaseConfigured() { return !SUPABASE_URL.includes('YOUR-PROJECT') && !SUPABASE_ANON_KEY.includes('YOUR-ANON'); }
 let supabaseClient = null;
 let currentUser = null;
-const SYNCABLE_KEYS = new Set([LS.principles, LS.portfolio, LS.journal, LS.transactions, LS.factchecks, LS.snapshots, LS.newsKeywords, LS.cashFlows]);
+const SYNCABLE_KEYS = new Set([LS.principles, LS.portfolio, LS.journal, LS.transactions, LS.factchecks, LS.snapshots, LS.newsKeywords, LS.cashFlows, LS.settings]);
 let cloudSyncTimer = null;
 function scheduleCloudSync() {
   if (!supabaseClient || !currentUser) return;
@@ -304,7 +306,7 @@ function scheduleCloudSync() {
 }
 async function pushToCloud() {
   if (!supabaseClient || !currentUser) return;
-  const payload = { principles: state.principles, portfolio: state.portfolio, journal: state.journal, transactions: state.transactions, factchecks: state.factchecks, snapshots: state.snapshots, newsKeywords: state.newsKeywords, cashFlows: state.cashFlows };
+  const payload = { principles: state.principles, portfolio: state.portfolio, journal: state.journal, transactions: state.transactions, factchecks: state.factchecks, snapshots: state.snapshots, newsKeywords: state.newsKeywords, cashFlows: state.cashFlows, settings: state.settings };
   const { error } = await supabaseClient.from('fomoguard_data').upsert({ user_id: currentUser.id, data: payload, updated_at: new Date().toISOString() });
   if (!error) localStorage.setItem('fomoguard_last_cloud_sync', String(Date.now()));
 }
@@ -321,6 +323,7 @@ async function pullFromCloud() {
     if (d.snapshots) { state.snapshots = d.snapshots; save(LS.snapshots, state.snapshots); }
     if (d.newsKeywords) { state.newsKeywords = d.newsKeywords; save(LS.newsKeywords, state.newsKeywords); }
     if (d.cashFlows) { state.cashFlows = d.cashFlows; save(LS.cashFlows, state.cashFlows); }
+    if (d.settings) { state.settings = d.settings; sanitizeSettings(); save(LS.settings, state.settings); }
     localStorage.setItem('fomoguard_last_cloud_sync', String(Date.now()));
     if (renderers[currentTab]) renderers[currentTab]();
   } else {
@@ -2155,7 +2158,7 @@ renderers.settings = function() {
     <div class="card p-4 mb-4">
       <p class="text-sm font-semibold mb-1">👤 계정 · 클라우드 동기화</p>
       ${isSupabaseConfigured() ? `
-        <p class="text-xs text-muted mb-3">로그인하면 원칙·포트폴리오·거래내역·일지가 클라우드에 자동 저장돼요. 쿠키를 지우거나 기기를 바꿔도 로그인만 하면 그대로 돌아옵니다.</p>
+        <p class="text-xs text-muted mb-3">로그인하면 원칙·포트폴리오·거래내역·일지와 등록해두신 API 키(AI·Twelve Data·GNews)까지 클라우드에 자동 저장돼요. 쿠키를 지우거나 기기를 바꿔도 로그인만 하면 그대로 돌아옵니다. (내 계정으로 로그인했을 때만 불러와지며, 다른 사용자와는 공유되지 않습니다)</p>
         ${state.profile ? `
           <div class="row p-3 flex items-center gap-3 mb-1">
             ${state.profile.picture ? `<img src="${escapeHtml(state.profile.picture)}" class="w-10 h-10 rounded-full">` : `<div class="w-10 h-10 rounded-full bg-brand flex items-center justify-center text-lg">👤</div>`}
@@ -2174,7 +2177,7 @@ renderers.settings = function() {
 
     <div class="card p-4 mb-4">
       <p class="text-sm font-semibold mb-1">🤖 AI 연동</p>
-      <p class="text-xs text-muted mb-3">${currentUser ? '로그인 상태라 API 키 없이도 하루 3회 무료로 AI 기능을 쓸 수 있어요. ' : ''}API 키를 등록하면 무제한·더 빠르게 이용할 수 있어요. 붙여넣으면 어떤 AI인지 자동으로 인식하고, 사용 가능한 모델 목록을 불러옵니다. 키는 이 브라우저에만 저장됩니다.</p>
+      <p class="text-xs text-muted mb-3">${currentUser ? '로그인 상태라 API 키 없이도 하루 3회 무료로 AI 기능을 쓸 수 있어요. ' : ''}API 키를 등록하면 무제한·더 빠르게 이용할 수 있어요. 붙여넣으면 어떤 AI인지 자동으로 인식하고, 사용 가능한 모델 목록을 불러옵니다. ${currentUser ? '로그인 중이라 이 키는 계정에 클라우드 저장되어 다른 기기에서도 로그인만 하면 불러와집니다.' : '로그인하지 않으면 키는 이 브라우저에만 저장됩니다.'}</p>
       <div class="grid grid-cols-4 gap-1.5 mb-3" id="st-provider-grid">
         ${Object.entries(AI_PROVIDERS).map(([key,p]) => `<button data-provider="${key}" class="row py-2 text-center text-[11px] font-semibold ${provider===key?'ring-2 ring-brand text-brand':'text-[#c6cbd9]'}">${p.label}</button>`).join('')}
       </div>
