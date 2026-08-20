@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>포모가드 | FomoGuard</title>
+<title>투자워워 | InvestWowo</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%9B%A1%EF%B8%8F%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -82,9 +82,9 @@ tailwind.config = {
 
 <div id="welcome-overlay" class="fixed inset-0 z-[90] hidden bg-[#05070c] px-6 items-center justify-center">
   <div class="w-full max-w-[380px] text-center">
-    <span class="text-6xl">🛡️</span>
-    <h1 class="font-extrabold text-2xl mt-4">포모가드</h1>
-    <p class="text-sm text-muted mt-1 mb-10">쉽고 편하게, 나만의 투자 집사</p>
+    <img src="/mascot/pose-wave.png" alt="투자워워 캐릭터가 인사하고 있어요" class="w-36 mx-auto mb-1" style="filter: drop-shadow(0 16px 28px rgba(49,130,246,0.28))">
+    <h1 class="font-extrabold text-2xl mt-3">투자워워</h1>
+    <p class="text-sm text-muted mt-1 mb-10">워워, 진정하고 원칙대로. 쉽고 편하게, 나만의 투자 집사</p>
     <div id="welcome-google-wrap" class="mb-3 flex justify-center"></div>
     <button id="welcome-skip" class="text-xs text-muted underline underline-offset-2 mt-3">나중에 할게요, 그냥 둘러볼래요 →</button>
   </div>
@@ -96,9 +96,9 @@ tailwind.config = {
     <div class="flex items-center gap-1">
       <button id="btn-back" class="hidden w-8 h-8 -ml-1.5 mr-0.5 rounded-full items-center justify-center text-xl text-[#c6cbd9] flex-shrink-0">←</button>
       <button id="btn-home" class="flex items-center gap-2 flex-1 text-left">
-        <span class="text-2xl">🛡️</span>
+        <img src="/mascot/face-B.png" alt="" class="w-8 h-8 object-contain flex-shrink-0">
         <div>
-          <h1 class="font-extrabold text-lg leading-none tracking-tight">포모가드</h1>
+          <h1 class="font-extrabold text-lg leading-none tracking-tight">투자워워</h1>
           <p class="text-[11px] text-muted leading-none mt-1.5">쉽고 편하게, 나만의 투자 집사</p>
         </div>
       </button>
@@ -374,7 +374,7 @@ function renderGoogleButton(targetId) {
 const GREETINGS = [
   n => `${n}님, 오늘도 냉철하게 가보시죠 🧊`,
   n => `어서오세요 ${n}님! 오늘의 존버 각오는 되셨나요?`,
-  n => `${n}님 등장! 포모가드가 오늘도 지켜드릴게요 🛡️`,
+  n => `${n}님 등장! 투자워워가 오늘도 지켜드릴게요 🐜`,
   n => `${n}님, '가즈아'는 감탄사일 뿐이에요... 원칙 먼저!`,
   n => `${n}님 반가워요! 오늘 하루도 이성 챙기고 가요`
 ];
@@ -385,9 +385,9 @@ function showWelcomeGreeting(name) {
 function renderHeaderProfile() {
   const wrap = document.getElementById('btn-home');
   if (state.profile) {
-    wrap.innerHTML = `${state.profile.picture ? `<img src="${escapeHtml(state.profile.picture)}" class="w-8 h-8 rounded-full flex-shrink-0">` : `<span class="text-2xl">🛡️</span>`}<div><h1 class="font-extrabold text-lg leading-none tracking-tight">포모가드</h1><p class="text-[11px] text-brand leading-none mt-1.5 font-semibold">${escapeHtml(state.profile.name)}님, 오늘도 원칙대로 🧊</p></div>`;
+    wrap.innerHTML = `${state.profile.picture ? `<img src="${escapeHtml(state.profile.picture)}" class="w-8 h-8 rounded-full flex-shrink-0">` : `<img src="/mascot/face-B.png" alt="" class="w-8 h-8 object-contain flex-shrink-0">`}<div><h1 class="font-extrabold text-lg leading-none tracking-tight">투자워워</h1><p class="text-[11px] text-brand leading-none mt-1.5 font-semibold">${escapeHtml(state.profile.name)}님, 오늘도 원칙대로 🧊</p></div>`;
   } else {
-    wrap.innerHTML = `<span class="text-2xl">🛡️</span><div><h1 class="font-extrabold text-lg leading-none tracking-tight">포모가드</h1><p class="text-[11px] text-muted leading-none mt-1.5">쉽고 편하게, 나만의 투자 집사</p></div>`;
+    wrap.innerHTML = `<img src="/mascot/face-B.png" alt="" class="w-8 h-8 object-contain flex-shrink-0"><div><h1 class="font-extrabold text-lg leading-none tracking-tight">투자워워</h1><p class="text-[11px] text-muted leading-none mt-1.5">쉽고 편하게, 나만의 투자 집사</p></div>`;
   }
 }
 function hideWelcomeOverlay() {
@@ -1083,7 +1083,7 @@ async function generateDailyAnalysis(silent) {
   const marketText = state.marketSnapshot && state.marketSnapshot.items.length ? state.marketSnapshot.items.map(i=>`- ${i.label}: ${fmtPct(i.pct)}`).join('\n') : '(시장 지표 없음)';
   const realized = realizedSummary();
 
-  const systemPrompt = `당신은 '포모가드'의 데일리 브리핑 작성자입니다. 확인되지 않은 뉴스나 사건을 절대 지어내지 마세요. 오직 제공된 시장 지표 수치와 사용자의 투자 원칙, 포트폴리오 현황만 근거로 3~4문장의 짧고 담백한 한국어 데일리 코멘트를 작성하세요. 과장하거나 확정적인 예측을 하지 말고, 사용자가 스스로 판단하도록 돕는 담담한 톤을 유지하세요. 다른 설명 없이 코멘트 본문만 출력하세요.`;
+  const systemPrompt = `당신은 '투자워워'의 데일리 브리핑 작성자입니다. 확인되지 않은 뉴스나 사건을 절대 지어내지 마세요. 오직 제공된 시장 지표 수치와 사용자의 투자 원칙, 포트폴리오 현황만 근거로 3~4문장의 짧고 담백한 한국어 데일리 코멘트를 작성하세요. 과장하거나 확정적인 예측을 하지 말고, 사용자가 스스로 판단하도록 돕는 담담한 톤을 유지하세요. 다른 설명 없이 코멘트 본문만 출력하세요.`;
   const userPrompt = `[오늘 날짜] ${todayStr()}\n[시장 지표 등락률]\n${marketText}\n\n[나의 투자 원칙]\n${principlesText}\n\n[내 포트폴리오 현황(종목별 수익률)]\n${portfolioText}\n\n[누적 실현손익] ${Math.round(realized.pnl).toLocaleString()}원\n\n위 정보를 바탕으로 오늘 하루 참고할 짧은 데일리 코멘트를 작성해줘.`;
 
   try {
@@ -1391,17 +1391,25 @@ renderers.dashboard = function() {
 
   el.innerHTML = `
     <div class="hero-card rounded-[26px] p-5 mt-2 mb-3">
-      <p class="text-xs text-muted mb-1.5">총 평가 자산 (원화 기준)</p>
-      <p class="text-[32px] font-extrabold leading-tight tracking-tight">${fmtWon(totalAssets)}</p>
-      ${hasData ? `<div class="flex items-center gap-1.5 mt-1.5">
-        <span class="badge ${totalPnlPct>0?'bg-up/15 text-up':totalPnlPct<0?'bg-down/15 text-down':'bg-line text-muted'}">${arrow} ${fmtPct(totalPnlPct)}</span>
-        <span class="text-xs ${pnlColor} font-semibold">${totalPnl>=0?'+':''}${fmtWon(totalPnl)}</span>
-      </div>` : `<p class="text-xs text-muted mt-1.5">포트폴리오 탭에서 보유 종목을 추가해보세요</p>`}
+      <div class="flex items-start justify-between gap-2">
+        <div class="flex-1 min-w-0">
+          <p class="text-xs text-muted mb-1.5">총 평가 자산 (원화 기준)</p>
+          <p class="text-[32px] font-extrabold leading-tight tracking-tight">${fmtWon(totalAssets)}</p>
+          ${hasData ? `<div class="flex items-center gap-1.5 mt-1.5">
+            <span class="badge ${totalPnlPct>0?'bg-up/15 text-up':totalPnlPct<0?'bg-down/15 text-down':'bg-line text-muted'}">${arrow} ${fmtPct(totalPnlPct)}</span>
+            <span class="text-xs ${pnlColor} font-semibold">${totalPnl>=0?'+':''}${fmtWon(totalPnl)}</span>
+          </div>` : `<p class="text-xs text-muted mt-1.5">포트폴리오 탭에서 보유 종목을 추가해보세요</p>`}
+        </div>
+        <img src="/mascot/${hasData ? (totalPnlPct>0?'pose-chart-up':totalPnlPct<0?'pose-chart-down':'pose-coin') : 'pose-wave'}.png" alt="" class="w-16 flex-shrink-0 -mt-1 -mr-1 object-contain">
+      </div>
     </div>
 
-    <div class="row p-3 mb-3">
-      <p class="text-[10px] text-muted mb-1">💬 오늘의 투자 격언</p>
-      <p class="text-xs leading-relaxed">"${escapeHtml(q.text)}" <span class="text-muted">— ${escapeHtml(q.who)}</span></p>
+    <div class="row p-3 mb-3 flex gap-2.5 items-start">
+      <img src="/mascot/face-F.png" alt="" class="w-9 h-9 object-contain flex-shrink-0 mt-0.5">
+      <div class="flex-1 min-w-0">
+        <p class="text-[10px] text-muted mb-1">💬 오늘의 투자 격언</p>
+        <p class="text-xs leading-relaxed">"${escapeHtml(q.text)}" <span class="text-muted">— ${escapeHtml(q.who)}</span></p>
+      </div>
     </div>
 
     <div class="grid grid-cols-2 gap-2 mb-3">
@@ -1593,9 +1601,9 @@ renderers.factcheck = function() {
 };
 
 function verdictStyle(v) {
-  if (v === '위배') return { color:'text-bad', bg:'bg-bad/10', border:'border-bad/30', emoji:'🚫' };
-  if (v === '주의') return { color:'text-warn', bg:'bg-warn/10', border:'border-warn/30', emoji:'⚠️' };
-  return { color:'text-good', bg:'bg-good/10', border:'border-good/30', emoji:'✅' };
+  if (v === '위배') return { color:'text-bad', bg:'bg-bad/10', border:'border-bad/30', emoji:'🚫', mascot:'face-D' };
+  if (v === '주의') return { color:'text-warn', bg:'bg-warn/10', border:'border-warn/30', emoji:'⚠️', mascot:'face-C' };
+  return { color:'text-good', bg:'bg-good/10', border:'border-good/30', emoji:'✅', mascot:'face-F' };
 }
 
 async function runFactCheck() {
@@ -1617,7 +1625,7 @@ async function runFactCheck() {
     : '(등록된 보유 종목 없음)';
   const recentJournal = state.journal.slice(-3).map(j => `- ${j.date}: ${j.content.slice(0,80)}`).join('\n') || '(기록 없음)';
 
-  const systemPrompt = `당신은 '포모가드'라는 개인 투자 집사 AI입니다. 사용자의 등록된 투자 원칙과 현재 포트폴리오, 최근 투자 일지를 참고하여, 사용자가 지금 하려는 투자가 그 원칙에 부합하는지 냉철하고 직설적으로 검증합니다. 근거 없는 응원이나 막연한 긍정은 금지합니다. 감정적 동조보다 사실과 논리를 우선하되, 무례하거나 모욕적이지는 않게 말합니다. 반드시 아래 JSON 형식으로만, 다른 텍스트 없이 답하세요:
+  const systemPrompt = `당신은 '투자워워'라는 개인 투자 집사 AI입니다. 사용자의 등록된 투자 원칙과 현재 포트폴리오, 최근 투자 일지를 참고하여, 사용자가 지금 하려는 투자가 그 원칙에 부합하는지 냉철하고 직설적으로 검증합니다. 근거 없는 응원이나 막연한 긍정은 금지합니다. 감정적 동조보다 사실과 논리를 우선하되, 무례하거나 모욕적이지는 않게 말합니다. 반드시 아래 JSON 형식으로만, 다른 텍스트 없이 답하세요:
 {"verdict":"위배 | 주의 | 양호","score":0-100 사이 정수(원칙 부합도),"summary":"핵심 총평 한두 문장","reasons":["근거 또는 우려 사항 1","근거 2","근거 3"],"advice":"지금 취해야 할 구체적 행동 조언 두세 문장"}`;
 
   const userPrompt = `[나의 투자 원칙]\n${principlesText}\n\n[현재 포트폴리오 요약]\n총 평가금액: ${Math.round(stats.totalValue).toLocaleString()}원, 누적 수익률: ${stats.returnPct.toFixed(1)}%\n${portfolioText}\n\n[최근 투자 일지]\n${recentJournal}\n\n[지금 하려는 투자]\n종목: ${ticker}\n예정 금액: ${amount ? Math.round(+amount).toLocaleString()+'원' : '미입력'}\n이유: ${reason}\n\n위 정보를 바탕으로 이 투자가 나의 원칙에 부합하는지 JSON으로만 답변하세요.`;
@@ -1651,9 +1659,9 @@ function renderFactCheckResult(result) {
   box.innerHTML = `
     <div class="card p-5 border ${s.border} ${s.bg} fade-in">
       <div class="flex items-center gap-3 mb-3">
-        <span class="text-3xl">${s.emoji}</span>
+        <img src="/mascot/${s.mascot}.png" alt="" class="w-12 h-12 object-contain flex-shrink-0">
         <div>
-          <p class="text-xl font-bold ${s.color}">${escapeHtml(result.verdict)}</p>
+          <p class="text-xl font-bold ${s.color}">${s.emoji} ${escapeHtml(result.verdict)}</p>
           <p class="text-xs text-muted">원칙 부합도 ${escapeHtml(String(result.score ?? '-'))}점</p>
         </div>
       </div>
@@ -2433,7 +2441,7 @@ renderers.more = function() {
       <div class="flex items-center gap-3">${iconBadge('🔀', '#64748b')}<span class="text-sm font-semibold">탭 순서 편집</span></div>
       <span class="text-muted">›</span>
     </button>
-    <p class="text-center text-[11px] text-muted mt-6">포모가드 · 나만의 투자 집사</p>
+    <p class="text-center text-[11px] text-muted mt-6">투자워워 · 나만의 투자 집사</p>
   `;
   el.querySelectorAll('[data-goto]').forEach(b => b.onclick = () => switchTab(b.dataset.goto));
   document.getElementById('more-taborder').onclick = () => switchTab('taborder');
