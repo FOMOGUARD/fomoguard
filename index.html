@@ -1180,7 +1180,7 @@ renderers.news = function() {
     </div>
   `).join('');
   feed.querySelectorAll('[data-refreshkw]').forEach(b => b.onclick = () => loadKeywordNews(b.dataset.refreshkw, true));
-  state.newsKeywords.forEach(k => loadKeywordNews(k, false));
+  (async () => { for (const k of state.newsKeywords) { await loadKeywordNews(k, false); await new Promise(r=>setTimeout(r, 500)); } })();
 };
 async function loadKeywordNews(keyword, forceRefresh) {
   const idx = state.newsKeywords.indexOf(keyword);

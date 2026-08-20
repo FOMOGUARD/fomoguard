@@ -16,12 +16,19 @@ async function translateText(text, target) {
   }
 }
 
-async function searchGNews(q, apiKey, fromDate, max, lang) {
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+async function searchGNews(q, apiKey, fromDate, max, lang, retriesLeft) {
+  if (retriesLeft === undefined) retriesLeft = 1;
   let url = `https://gnews.io/api/v4/search?q=${encodeURIComponent(q)}&sortby=publishedAt&from=${encodeURIComponent(fromDate || '')}&max=${encodeURIComponent(max || 10)}&apikey=${encodeURIComponent(apiKey)}`;
   if (lang) url += `&lang=${encodeURIComponent(lang)}`;
   const res = await fetch(url);
   const text = await res.text();
   if (!res.ok) {
+    if (res.status === 429 && retriesLeft > 0) {
+      await sleep(1500);
+      return searchGNews(q, apiKey, fromDate, max, lang, retriesLeft - 1);
+    }
     let msg = text.slice(0, 200);
     try { msg = JSON.parse(text).errors?.join(' ') || msg; } catch (e) {}
     const err = new Error(`GNews API 오류 (${res.status}): ${msg}`);
@@ -49,15 +56,15 @@ export async function onRequestPost(context) {
     globalQuery = await translateText(keyword, 'en');
   }
 
+  // GNews의 순간 요청 제한(버스트 rate limit)에 걸리지 않도록, 두 검색을 동시에 쏘지 않고 순차 실행한다.
   let domesticResult = { articles: [], totalArticles: 0 };
   let globalResult = { articles: [], totalArticles: 0 };
   try {
-    const searches = [];
-    // 국내(한국어) 뉴스: 원래 키워드 그대로, 한국어로 제한
-    if (korean) searches.push(searchGNews(keyword, apiKey, fromDate, perSearchMax, 'ko').then(r => { domesticResult = r; }));
-    // 해외(글로벌) 뉴스: 번역된(또는 원본) 키워드로, 언어 제한 없이 폭넓게
-    searches.push(searchGNews(globalQuery, apiKey, fromDate, perSearchMax, null).then(r => { globalResult = r; }));
-    await Promise.all(searches);
+    if (korean) {
+      domesticResult = await searchGNews(keyword, apiKey, fromDate, perSearchMax, 'ko');
+      await sleep(350);
+    }
+    globalResult = await searchGNews(globalQuery, apiKey, fromDate, perSearchMax, null);
   } catch (e) {
     return json(e.status || 502, { error: e.message || '뉴스 서버(GNews)에 연결하지 못했습니다.' });
   }
