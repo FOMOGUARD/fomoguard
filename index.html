@@ -1101,12 +1101,13 @@ async function fetchNewsForKeyword(keyword) {
   const key = state.settings.newsApiKey;
   if (!key) throw new Error('뉴스 API 키가 등록되어 있지 않습니다.');
   const fromDate = new Date(Date.now() - 3*86400000).toISOString();
+  const hasKorean = /[가-힣]/.test(keyword);
   let res;
   try {
     res = await fetch('/news-proxy', {
       method: 'POST',
       headers: { 'content-type':'application/json' },
-      body: JSON.stringify({ keyword, apiKey:key, fromDate, max:10 })
+      body: JSON.stringify({ keyword, apiKey:key, fromDate, max:10, lang: hasKorean ? 'ko' : undefined })
     });
   } catch (e) {
     throw new Error('뉴스 서버에 연결하지 못했습니다. 잠시 후 다시 시도해주세요.');
@@ -1119,7 +1120,8 @@ async function fetchNewsForKeyword(keyword) {
   items = items.filter(it => { const t = Date.parse(it.publishedAt); return !isNaN(t) && t >= cutoff; });
   items.sort((a,b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt));
   items = items.slice(0, 8);
-  state.newsCache[keyword] = { date: todayStr(), items };
+  items.totalFound = data.totalArticles ?? data.articles.length;
+  state.newsCache[keyword] = { date: todayStr(), items, totalFound: items.totalFound };
   save(LS.newsCache, state.newsCache);
   return items;
 }
@@ -1182,12 +1184,19 @@ async function loadKeywordNews(keyword, forceRefresh) {
   const blockEl = document.getElementById('news-block-'+idx);
   if (!blockEl) return;
   const cached = state.newsCache[keyword];
-  if (!forceRefresh && cached && cached.date === todayStr()) { renderNewsItems(blockEl, cached.items); return; }
+  if (!forceRefresh && cached && cached.date === todayStr()) {
+    if (cached.items.length === 0) { blockEl.innerHTML = `<p class="text-xs text-muted">최근 3일 내 관련 뉴스가 없습니다.${cached.totalFound ? ` (GNews 전체 검색결과 ${cached.totalFound}건 중 3일 이내 0건 — 기간을 벗어난 오래된 기사만 있는 것으로 보여요)` : ''}</p>`; return; }
+    renderNewsItems(blockEl, cached.items);
+    return;
+  }
   if (!state.settings.newsApiKey) { blockEl.innerHTML = `<p class="text-xs text-muted">뉴스 API 키를 등록하면 이 키워드의 최신 뉴스를 볼 수 있어요.</p>`; return; }
   blockEl.innerHTML = `<p class="text-xs text-muted"><span class="inline-block spin">⏳</span> 최신 뉴스를 불러오는 중...</p>`;
   try {
     const items = await fetchNewsForKeyword(keyword);
-    if (items.length === 0) { blockEl.innerHTML = `<p class="text-xs text-muted">최근 3일 내 관련 뉴스가 없습니다.</p>`; return; }
+    if (items.length === 0) {
+      blockEl.innerHTML = `<p class="text-xs text-muted">최근 3일 내 관련 뉴스가 없습니다.${items.totalFound ? ` (GNews 전체 검색결과 ${items.totalFound}건 중 3일 이내 0건 — 기간을 벗어난 오래된 기사만 있는 것으로 보여요)` : ' (GNews에서 이 키워드로 검색된 기사가 아예 없습니다 — 다른 키워드를 시도해보세요)'}</p>`;
+      return;
+    }
     renderNewsItems(blockEl, items);
   } catch (err) {
     blockEl.innerHTML = `<p class="text-xs text-bad">뉴스를 불러오지 못했습니다: ${escapeHtml(err.message)}</p>`;

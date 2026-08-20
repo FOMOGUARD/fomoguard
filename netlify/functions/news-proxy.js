@@ -4,11 +4,12 @@ exports.handler = async (event) => {
   }
   let body;
   try { body = JSON.parse(event.body || '{}'); } catch (e) { body = {}; }
-  const { keyword, apiKey, fromDate, max } = body;
+  const { keyword, apiKey, fromDate, max, lang } = body;
   if (!apiKey) return { statusCode: 400, body: JSON.stringify({ error: 'GNews API 키가 없습니다. 설정에서 등록해주세요.' }) };
   if (!keyword) return { statusCode: 400, body: JSON.stringify({ error: '검색 키워드가 없습니다.' }) };
 
-  const url = `https://gnews.io/api/v4/search?q=${encodeURIComponent(keyword)}&sortby=publishedAt&from=${encodeURIComponent(fromDate || '')}&max=${encodeURIComponent(max || 10)}&apikey=${encodeURIComponent(apiKey)}`;
+  let url = `https://gnews.io/api/v4/search?q=${encodeURIComponent(keyword)}&sortby=publishedAt&from=${encodeURIComponent(fromDate || '')}&max=${encodeURIComponent(max || 10)}&apikey=${encodeURIComponent(apiKey)}`;
+  if (lang) url += `&lang=${encodeURIComponent(lang)}`;
   let res;
   try {
     res = await fetch(url);

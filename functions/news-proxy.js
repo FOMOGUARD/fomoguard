@@ -6,11 +6,12 @@ export async function onRequestPost(context) {
   const { request } = context;
   let body;
   try { body = await request.json(); } catch (e) { body = {}; }
-  const { keyword, apiKey, fromDate, max } = body;
+  const { keyword, apiKey, fromDate, max, lang } = body;
   if (!apiKey) return json(400, { error: 'GNews API 키가 없습니다. 설정에서 등록해주세요.' });
   if (!keyword) return json(400, { error: '검색 키워드가 없습니다.' });
 
-  const url = `https://gnews.io/api/v4/search?q=${encodeURIComponent(keyword)}&sortby=publishedAt&from=${encodeURIComponent(fromDate || '')}&max=${encodeURIComponent(max || 10)}&apikey=${encodeURIComponent(apiKey)}`;
+  let url = `https://gnews.io/api/v4/search?q=${encodeURIComponent(keyword)}&sortby=publishedAt&from=${encodeURIComponent(fromDate || '')}&max=${encodeURIComponent(max || 10)}&apikey=${encodeURIComponent(apiKey)}`;
+  if (lang) url += `&lang=${encodeURIComponent(lang)}`;
   let res;
   try {
     res = await fetch(url);
