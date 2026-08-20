@@ -553,8 +553,7 @@ function retColor(ret) {
 }
 function quoteOfTheDay() {
   const pool = [...MARKET_QUOTES, ...MEME_QUOTES];
-  const day = Math.floor(Date.now()/86400000);
-  return pool[day % pool.length];
+  return pool[Math.floor(Math.random()*pool.length)];
 }
 
 /* ================= INVESTOR TEMPLATES (검증 및 초보자용으로 재정리) ================= */
@@ -712,7 +711,35 @@ const MARKET_QUOTES = [
   { text: '시간이 시장 타이밍을 이긴다는 오래된 투자 격언', who:'전통 투자 격언' },
   { text: '싸게 사서 비싸게 팔라는 말은 쉽지만 지키기는 가장 어려운 격언이라는 뜻', who:'월가 트레이딩 격언' },
   { text: '돈을 버는 것보다 지키는 것이 어렵다는 오래된 투자 격언', who:'전통 투자 격언' },
-  { text: '확신이 없다면 아무것도 하지 않는 것도 하나의 전략이라는 투자 격언', who:'전통 투자 격언' }
+  { text: '확신이 없다면 아무것도 하지 않는 것도 하나의 전략이라는 투자 격언', who:'전통 투자 격언' },
+  { text: '위험은 자신이 무엇을 하고 있는지 모르는 데서 온다는 것을 강조했다', who:'워런 버핏의 투자 철학에서' },
+  { text: '훌륭한 회사를 적당한 가격에 사는 것이, 그저 그런 회사를 싼값에 사는 것보다 낫다고 말했다', who:'워런 버핏의 투자 철학에서' },
+  { text: '가장 좋아하는 보유 기간은 영원이라는 말로 장기 투자를 강조했다', who:'워런 버핏의 투자 철학에서' },
+  { text: '큰돈은 사고파는 데서가 아니라 기다리는 데서 나온다고 말했다', who:'찰리 멍거의 투자 철학에서' },
+  { text: '내가 어디서 죽을지만 알면 그곳에 절대 가지 않겠다는 말로 리스크 회피를 강조했다', who:'찰리 멍거의 투자 철학에서' },
+  { text: '건초더미에서 바늘을 찾으려 하지 말고, 건초더미 전체를 사라고 조언했다', who:'존 보글의 투자 철학에서' },
+  { text: '시장의 수정구슬에 의지하는 사람은 결국 깨진 유리를 씹게 된다고 경고했다', who:'레이 달리오의 투자 철학에서' },
+  { text: '투자는 페인트가 마르는 것을 지켜보는 일에 가까워야 한다고 말했다', who:'폴 새뮤얼슨의 투자 철학에서' },
+  { text: '얼마나 버는지가 아니라, 맞았을 때 얼마나 벌고 틀렸을 때 얼마나 잃는지가 중요하다고 재차 강조했다', who:'조지 소로스의 투자 철학에서' },
+  { text: '대포 소리에 사서 나팔 소리에 팔라는 말로 위기 속 매수를 이야기했다', who:'네이선 로스차일드의 어록에서' },
+  { text: '최저점에 사고 최고점에 팔려는 시도는 애초에 하지 말라고 조언했다', who:'버나드 바루크의 어록에서' },
+  { text: '오르는 종목이 왜 오르는지 모른 채 올라타는 것을 가장 경계했다', who:'제시 리버모어의 투자 철학에서' },
+  { text: '내게 큰돈을 벌어준 것은 생각이 아니라 진득하게 버틴 것이었다고 회고했다', who:'제시 리버모어의 투자 철학에서' },
+  { text: '결과보다 과정을, 수익보다 원칙을 지켰는지를 먼저 돌아보라고 강조했다', who:'하워드 막스의 투자 철학에서' },
+  { text: '중요한 것은 몇 번 맞았는지가 아니라, 맞았을 때 얼마나 크게 맞았는지라고 말했다', who:'스탠리 드러켄밀러의 투자 철학에서' },
+  { text: '남들이 보지 않는 곳에서 기회를 찾는 것이 초과 수익의 근원이라고 말했다', who:'피터 린치의 투자 철학에서' },
+  { text: '산이 높으면 골도 깊다는 말로 급등 뒤의 급락 가능성을 경계했다', who:'한국 증권가 격언' },
+  { text: '밀짚모자는 겨울에 사라는 말로 비수기에 미리 준비하는 지혜를 전했다', who:'한국 증권가 격언' },
+  { text: '천장 3일 없고 바닥 3일 없다는 말로 극단적인 시점을 예단하지 말라고 경고했다', who:'한국 증권가 격언' },
+  { text: '떨어지는 낙엽도 조심하라는 말로 하락장에서는 사소한 신호도 가볍게 넘기지 말라고 전했다', who:'한국 증권가 격언' },
+  { text: '산삼과 도라지는 잎이 비슷하니 옥석을 가리는 눈을 기르라는 뜻을 담았다', who:'한국 증권가 격언' },
+  { text: '연준과 싸우지 말라는 말로 통화정책의 흐름을 거스르지 말라고 조언했다', who:'월가 트레이딩 격언' },
+  { text: '5월에는 팔고 떠나라는 계절적 격언이지만, 만능 공식은 아니라는 점도 함께 기억해야 한다', who:'월가 트레이딩 격언' },
+  { text: '뉴스가 완전히 나쁠 때가 오히려 바닥에 가깝다는 역발상을 담았다', who:'전통 투자 격언' },
+  { text: '내가 아는 것을 아는 것과, 내가 모른다는 것을 아는 것은 전혀 다른 차원이라는 격언을 남겼다', who:'전통 투자 격언' },
+  { text: '수익은 인내에 대한 보상이지, 조급함에 대한 보상이 아니라는 뜻을 담았다', who:'전통 투자 격언' },
+  { text: '시장에서 이기려 하기보다, 오래 살아남는 것을 목표로 하라는 조언을 담았다', who:'전통 투자 격언' },
+  { text: '가격이 아니라 이유를 보고 사라는 오래된 트레이딩 원칙을 강조했다', who:'월가 트레이딩 격언' }
 ];
 const MEME_QUOTES = [
   { text: '존버는 승리한다 — 다만 원칙 없는 존버는 승리가 아니라 그냥 버티기다', who:'온라인 투자 커뮤니티 밈' },
@@ -769,7 +796,36 @@ const MEME_QUOTES = [
   { text: '존버든 손절이든, 결정의 이유를 스스로 설명할 수 있어야 한다', who:'투자 커뮤니티 유행어' },
   { text: '리딩방 추천보다 내 원칙이 우선이다', who:'투자 커뮤니티 유행어' },
   { text: '"지금 아니면 안 된다"는 조급함, 대부분 착각이다', who:'투자 커뮤니티 자조 개그' },
-  { text: '수익률 인증보다 원칙을 지킨 기록이 더 오래 남는다', who:'투자 커뮤니티 유행어' }
+  { text: '수익률 인증보다 원칙을 지킨 기록이 더 오래 남는다', who:'투자 커뮤니티 유행어' },
+  { text: '"공부는 매수 버튼 누른 다음부터"는 가장 위험한 순서다', who:'투자 커뮤니티 자조 개그' },
+  { text: '물타기 세 번이면 이미 새로운 종목을 하나 산 셈이다', who:'투자 커뮤니티 자조 개그' },
+  { text: '"손절각인데 일단 지켜보자"의 결말은 대체로 좋지 않다', who:'투자 커뮤니티 자조 개그' },
+  { text: '급등주 캡처는 대부분 이미 다 오른 뒤에 도착한다', who:'투자 커뮤니티 유행어' },
+  { text: '"이건 다르다"는 말이 나올 때가 가장 위험한 순간이다', who:'투자 커뮤니티 유행어' },
+  { text: '알림 꺼두고 잊고 있던 종목이 의외로 효자가 되기도 한다', who:'투자 커뮤니티 자조 개그' },
+  { text: '재무제표보다 커뮤니티 반응 먼저 보는 습관은 위험 신호다', who:'투자 커뮤니티 유행어' },
+  { text: '"묻지마 투자"의 반대말은 "묻고 따지는 투자"다, 당연한 말이지만 다들 잊는다', who:'투자 커뮤니티 자조 개그' },
+  { text: '갭상승에 따라 들어가면 대체로 갭하락을 함께 배운다', who:'투자 커뮤니티 유행어' },
+  { text: '"내일 팔아야지"는 오늘도 내일도 계속 미뤄진다', who:'투자 커뮤니티 자조 개그' },
+  { text: '단타로 시작해서 장투로 끝나는 건 실력이 아니라 사고다', who:'투자 커뮤니티 자조 개그' },
+  { text: '수익 인증은 쉽고, 손실 인증은 어렵다는 게 커뮤니티의 진실이다', who:'투자 커뮤니티 유행어' },
+  { text: '차트에 그은 선은 대체로 내가 사고 싶은 방향으로 그어진다', who:'투자 커뮤니티 자조 개그' },
+  { text: '"바닥인 줄 알았는데 지하가 있었다"는 흔한 후기다', who:'투자 커뮤니티 유행어' },
+  { text: '테마주 급등 뒤에는 항상 누군가의 매도 물량이 기다리고 있다', who:'투자 커뮤니티 유행어' },
+  { text: '"이 가격에 못 사면 평생 후회"라는 말은 대부분 몇 달 뒤 틀린다', who:'투자 커뮤니티 자조 개그' },
+  { text: '알고리즘이 추천한 종목보다 내가 이해한 종목이 마음이 편하다', who:'투자 커뮤니티 유행어' },
+  { text: '고점 매수 후 "장기투자로 전환"은 계획이 아니라 회피다', who:'투자 커뮤니티 자조 개그' },
+  { text: '레버리지는 수익도 두 배, 잠 못 드는 밤도 두 배다', who:'투자 커뮤니티 유행어' },
+  { text: '"한 번만 크게 맞으면 은퇴"라는 계획엔 대체로 은퇴가 없다', who:'투자 커뮤니티 자조 개그' },
+  { text: '급등 이후 뒤늦게 산 사람이 가장 크게 흔들린다', who:'투자 커뮤니티 유행어' },
+  { text: '"소문난 잔치에 먹을 것 없다"는 투자에도 그대로 적용된다', who:'투자 커뮤니티 유행어' },
+  { text: '남의 계좌 인증보다 내 매매일지가 백배 유용하다', who:'투자 커뮤니티 유행어' },
+  { text: '"이번 조정은 짧을 것"이라는 예측은 늘 반은 맞고 반은 틀린다', who:'투자 커뮤니티 자조 개그' },
+  { text: '급하게 번 돈은 급하게 나가는 경우가 많다', who:'투자 커뮤니티 유행어' },
+  { text: '"존버 각"이라는 말도 처음엔 계획이었다가 나중엔 변명이 된다', who:'투자 커뮤니티 자조 개그' },
+  { text: '리딩방 수익 인증은 리딩방을 파는 광고에 가깝다', who:'투자 커뮤니티 유행어' },
+  { text: '내 종목만 안 오른다는 착각의 반대편에도 똑같이 생각하는 사람이 있다', who:'투자 커뮤니티 자조 개그' },
+  { text: '"오늘만 사고 끝"이라는 다짐은 내일이면 다시 새로 생긴다', who:'투자 커뮤니티 자조 개그' }
 ];
 
 /* ================= 투자 나침반 (온보딩 성향 진단) ================= */
@@ -891,8 +947,8 @@ function realizedSummary() {
   return { pnl, costBasis };
 }
 function computeCashBalance() { return state.cashFlows.reduce((s,c)=>s+c.amountKRW, 0); }
-function recordCashFlow(type, amountKRW, note, date) {
-  state.cashFlows.push({ id: uid(), date: date || todayStr(), ts: Date.now(), type, amountKRW, note: note || '' });
+function recordCashFlow(type, amountKRW, note, date, origin) {
+  state.cashFlows.push({ id: uid(), date: date || todayStr(), ts: Date.now(), type, amountKRW, note: note || '', currency: (origin&&origin.currency)||'KRW', originalAmount: origin?origin.amount:undefined });
   save(LS.cashFlows, state.cashFlows);
 }
 function computeTotalPnl() {
@@ -1732,7 +1788,16 @@ function openCashFlowModal() {
       <p class="text-xl font-extrabold">${fmtWon(balance)}</p>
     </div>
     <div class="space-y-3 mb-4">
-      <div><label class="text-xs text-muted mb-1 block">입금액 (원)</label><input id="cf-amount" type="number" placeholder="예: 1000000"></div>
+      <div class="flex gap-2">
+        <div class="flex-1"><label class="text-xs text-muted mb-1 block">입금액</label><input id="cf-amount" type="number" placeholder="예: 1000000"></div>
+        <div style="width:96px"><label class="text-xs text-muted mb-1 block">통화</label>
+          <select id="cf-currency">
+            <option value="KRW">원화 (₩)</option>
+            <option value="USD">달러 ($)</option>
+          </select>
+        </div>
+      </div>
+      <p id="cf-fx-hint" class="text-[10px] text-muted hidden"></p>
       <div><label class="text-xs text-muted mb-1 block">메모 (선택)</label><input id="cf-note" type="text" placeholder="예: 8월 정기 입금"></div>
     </div>
     <button id="cf-submit" class="btn-brand w-full py-3 rounded-xl text-sm font-bold mb-4">입금 기록</button>
@@ -1740,7 +1805,7 @@ function openCashFlowModal() {
     <div class="space-y-1.5 max-h-48 overflow-y-auto">
       ${history.length ? history.map(c => `
         <div class="row p-2.5 flex items-center justify-between text-xs">
-          <div><span class="font-semibold">${typeLabel[c.type]||c.type}</span> <span class="text-muted">${escapeHtml(c.date)}${c.note?' · '+escapeHtml(c.note):''}</span></div>
+          <div><span class="font-semibold">${typeLabel[c.type]||c.type}</span> <span class="text-muted">${escapeHtml(c.date)}${c.note?' · '+escapeHtml(c.note):''}${c.currency==='USD'&&c.originalAmount?' · $'+(+c.originalAmount).toLocaleString('en-US',{maximumFractionDigits:2}):''}</span></div>
           <span class="font-bold ${c.amountKRW>=0?'text-up':'text-down'}">${c.amountKRW>=0?'+':''}${fmtWon(c.amountKRW)}</span>
         </div>
       `).join('') : '<p class="text-xs text-muted text-center py-3">내역이 없습니다.</p>'}
@@ -1748,11 +1813,23 @@ function openCashFlowModal() {
   `, `
     <button class="btn-ghost px-4 py-2.5 rounded-xl text-sm w-full" onclick="closeModal()">닫기</button>
   `);
+  const curSel = document.getElementById('cf-currency');
+  const fxHint = document.getElementById('cf-fx-hint');
+  const updateFxHint = () => {
+    if (curSel.value === 'USD') {
+      fxHint.classList.remove('hidden');
+      fxHint.textContent = state.fx.rate ? `현재 환율(1달러 ${Math.round(state.fx.rate).toLocaleString()}원)로 원화 환산되어 저장됩니다.` : '환율 정보가 없어 1달러=1원으로 처리됩니다. 대시보드에서 환율을 먼저 갱신해주세요.';
+    } else { fxHint.classList.add('hidden'); }
+  };
+  curSel.onchange = updateFxHint;
+  updateFxHint();
   document.getElementById('cf-submit').onclick = () => {
     const amount = +document.getElementById('cf-amount').value;
+    const currency = curSel.value;
     const note = document.getElementById('cf-note').value.trim();
     if (!amount || amount<=0) { toast('입금액을 올바르게 입력해주세요.', 'warn'); return; }
-    recordCashFlow('deposit', amount, note);
+    const amountKRW = currency === 'USD' ? amount * (state.fx.rate||1) : amount;
+    recordCashFlow('deposit', amountKRW, note, undefined, { currency, amount });
     toast('입금을 기록했습니다.', 'success');
     if (currentTab === 'dashboard') renderers.dashboard();
     openCashFlowModal();
