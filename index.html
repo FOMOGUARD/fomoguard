@@ -1102,8 +1102,9 @@ async function generateDailyAnalysis(silent) {
    서버 프록시(/news-proxy, Cloudflare Pages Functions)를 거쳐 호출한다.
    프록시는 한글 키워드일 경우 영문으로 번역해 해외 뉴스까지 함께 검색하고,
    비한국어 기사는 제목·요약을 한국어로 번역해서 돌려준다. */
-const NEWS_POSITIVE_WORDS = ['급등','상승','신고가','사상 최고','최고치','호실적','실적 개선','흑자','수주','대박','성장세','돌파','반등','강세','기대감','호재','확장','증가','인수 완료','깜짝 실적','surge','soar','rally','record high','beats','profit','growth','upgrade','jump','rebound','outperform','boost','breakthrough','all-time high'];
-const NEWS_NEGATIVE_WORDS = ['급락','폭락','하락','적자','손실','리콜','소송','조사','제재','파산','감원','구조조정','경고','우려','부진','약세','위기','악재','벌금','규제 강화','plunge','slump','crash','loss','lawsuit','recall','investigation','sanction','bankruptcy','layoff','warning','downgrade','probe','fine','sued'];
+const NEWS_CACHE_VERSION = 2;
+const NEWS_POSITIVE_WORDS = ['급등','상승','신고가','사상 최고','최고치','호실적','실적 개선','실적 호조','흑자','흑자전환','수주','대박','성장세','성장','돌파','반등','강세','기대감','호재','확장','증가','인수 완료','깜짝 실적','최대 실적','목표가 상향','매수 의견','투자 확대','수출 호조','훈풍','청신호','순항','회복세','도약','surge','soar','rally','record high','beats expectations','beat estimates','profit','growth','upgrade','jump','rebound','outperform','boost','breakthrough','all-time high','soars','climbs','gains','strong demand','expansion'];
+const NEWS_NEGATIVE_WORDS = ['급락','폭락','하락','적자','손실','리콜','소송','조사','제재','파산','감원','구조조정','경고','우려','부진','약세','위기','악재','벌금','규제 강화','목표가 하향','매도 의견','실적 부진','실적 쇼크','충격','타격','급감','철수','중단','논란','비상','최악','내림세','침체','투자 위험','risk','plunge','slump','crash','loss','lawsuit','recall','investigation','sanction','bankruptcy','layoff','warning','downgrade','probe','fine','sued','miss expectations','falls','drops','tumbles','slides','cuts jobs','shortage'];
 function classifyNewsSentiment(text) {
   const t = (text || '').toLowerCase();
   let pos = 0, neg = 0;
@@ -1111,6 +1112,9 @@ function classifyNewsSentiment(text) {
   NEWS_NEGATIVE_WORDS.forEach(w => { if (t.includes(w.toLowerCase())) neg++; });
   if (pos === neg) return 'neutral';
   return pos > neg ? 'positive' : 'negative';
+}
+function isFreshNewsCache(cached) {
+  return !!cached && cached.date === todayStr() && cached.v === NEWS_CACHE_VERSION;
 }
 async function fetchNewsForKeyword(keyword) {
   const key = state.settings.newsApiKey;
@@ -1139,7 +1143,7 @@ async function fetchNewsForKeyword(keyword) {
   items.sort((a,b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt));
   items = items.slice(0, 10);
   items.totalFound = data.totalArticles ?? data.articles.length;
-  state.newsCache[keyword] = { date: todayStr(), items, totalFound: items.totalFound };
+  state.newsCache[keyword] = { date: todayStr(), items, totalFound: items.totalFound, v: NEWS_CACHE_VERSION };
   save(LS.newsCache, state.newsCache);
   return items;
 }
@@ -1147,7 +1151,7 @@ async function fetchAllNewsKeywords() {
   if (!state.settings.newsApiKey || !state.newsKeywords.length) return;
   for (const k of state.newsKeywords) {
     const cached = state.newsCache[k];
-    if (cached && cached.date === todayStr()) continue;
+    if (isFreshNewsCache(cached)) continue;
     try { await fetchNewsForKeyword(k); } catch(e) {}
     await new Promise(r=>setTimeout(r, 400));
   }
@@ -1215,7 +1219,7 @@ renderers.news = function() {
 };
 async function loadKeywordNewsData(keyword, forceRefresh) {
   const cached = state.newsCache[keyword];
-  if (!forceRefresh && cached && cached.date === todayStr()) { delete newsErrors[keyword]; return; }
+  if (!forceRefresh && isFreshNewsCache(cached)) { delete newsErrors[keyword]; return; }
   if (!state.settings.newsApiKey) return;
   try {
     await fetchNewsForKeyword(keyword);
@@ -1236,7 +1240,7 @@ function renderNewsFeed() {
     let anyLoading = false, anyError = false;
     for (const k of state.newsKeywords) {
       const cached = state.newsCache[k];
-      if (cached && cached.date === todayStr()) {
+      if (isFreshNewsCache(cached)) {
         cached.items.forEach(it => { if (!seen.has(it.url)) { seen.add(it.url); merged.push({ ...it, _keyword:k }); } });
       } else if (newsErrors[k]) { anyError = true; }
       else { anyLoading = true; }
@@ -1251,7 +1255,7 @@ function renderNewsFeed() {
   } else {
     feed.innerHTML = state.newsKeywords.map(k => {
       const cached = state.newsCache[k];
-      const isToday = cached && cached.date === todayStr();
+      const isToday = isFreshNewsCache(cached);
       const count = isToday ? cached.items.length : null;
       const expanded = expandedNewsKeywords.has(k);
       let bodyHtml = '';
