@@ -36,6 +36,34 @@ function parseGoogleNewsRss(xml) {
   return items;
 }
 
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const FETCH_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+  'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8'
+};
+
+// 구글 뉴스가 클라우드플레어 쪽 IP에서 오는 요청을 간헐적으로 503으로 막는 경우가 있어,
+// 짧은 간격을 두고 최대 3번까지 재시도한다 (news-proxy.js의 GNews 429 재시도와 같은 패턴).
+async function fetchWithRetry(url, retries) {
+  if (retries === undefined) retries = 2;
+  let lastStatus = 0;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    if (attempt > 0) await sleep(500 * attempt);
+    let res;
+    try {
+      res = await fetch(url, { headers: FETCH_HEADERS });
+    } catch (e) {
+      continue;
+    }
+    if (res.ok) return res;
+    lastStatus = res.status;
+  }
+  const err = new Error(`뉴스 조회 오류 (${lastStatus || 502})`);
+  err.status = lastStatus || 502;
+  throw err;
+}
+
 // 무료 뉴스 조회 - GNews API 키를 등록하지 않은 사용자를 위한 기본 경로.
 // 구글 뉴스 공개 RSS 검색을 사용해 요청 횟수 허들 없이 헤드라인을 제공한다.
 // 자체 GNews 키를 등록한 사용자는 이 경로 대신 기존 /news-proxy(GNews)를 그대로 사용한다.
@@ -49,11 +77,10 @@ export async function onRequestPost(context) {
   const url = `https://news.google.com/rss/search?q=${encodeURIComponent(keyword)}&hl=ko&gl=KR&ceid=KR:ko`;
   let res;
   try {
-    res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    res = await fetchWithRetry(url);
   } catch (e) {
-    return json(502, { error: '뉴스 서버에 연결하지 못했습니다.' });
+    return json(502, { error: e.message || '뉴스 서버에 연결하지 못했습니다.' });
   }
-  if (!res.ok) return json(502, { error: `뉴스 조회 오류 (${res.status})` });
   const xml = await res.text();
   const articles = parseGoogleNewsRss(xml).slice(0, 20);
   return json(200, { articles, totalArticles: articles.length });
