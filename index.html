@@ -1289,7 +1289,7 @@ function computeTotalPnl() {
   return { unrealizedPnl, realizedPnl: realized.pnl, totalPnl, totalDeployedCost, totalPnlPct };
 }
 /* ================= 성장 시스템 (레벨 · 계열 칭호 · 오늘의 유형 · 하루 1문제) ================= */
-function xpForLevel(n) { return Math.round(30*Math.pow(n,1.6)) + 20; } // n레벨에서 n+1레벨로 가는 데 필요한 경험치 (뒤로 갈수록 가파르게 증가)
+function xpForLevel(n) { return Math.round(40*Math.pow(n,1.4)) + 20; } // n레벨에서 n+1레벨로 가는 데 필요한 경험치 (매일 최대치로 활동 시 Lv.21까지 약 6개월)
 function computeLevelFromXp(xp) {
   let level = 1, remaining = xp, need = xpForLevel(1);
   while (remaining >= need) { remaining -= need; level++; need = xpForLevel(level); }
@@ -1309,12 +1309,12 @@ function computeTrack() {
   return 'balanced';
 }
 const RANK_TIERS = [
-  { minLevel:1,  maxLevel:2,        none:'주린이', domestic:'주린이',              overseas:'주린이',              balanced:'주린이' },
-  { minLevel:3,  maxLevel:5,        none:'주린이', domestic:'동학개미 새싹',        overseas:'서학개미 새싹',        balanced:'밸런스 개미' },
-  { minLevel:6,  maxLevel:9,        none:'주린이', domestic:'동학개미',             overseas:'서학개미',             balanced:'올라운드 개미' },
-  { minLevel:10, maxLevel:14,       none:'주린이', domestic:'동학개미 고인물',      overseas:'서학개미 고인물',      balanced:'밸런스 마스터' },
-  { minLevel:15, maxLevel:20,       none:'주린이', domestic:'국장의 신',            overseas:'월가의 개미',          balanced:'자산배분의 정석' },
-  { minLevel:21, maxLevel:Infinity, none:'주린이', domestic:'여의도 전설',          overseas:'나스닥 전설',          balanced:'투자계의 현자' }
+  { minLevel:1,  maxLevel:2,        none:'주린이', domestic:'주린이',        overseas:'주린이',        balanced:'주린이' },
+  { minLevel:3,  maxLevel:5,        none:'주린이', domestic:'일개미',        overseas:'일개미',        balanced:'일개미' },
+  { minLevel:6,  maxLevel:9,        none:'주린이', domestic:'동학개미',      overseas:'서학개미',      balanced:'동서학 개미' },
+  { minLevel:10, maxLevel:14,       none:'주린이', domestic:'여의도 개미',   overseas:'월가 개미',     balanced:'재미교포 개미' },
+  { minLevel:15, maxLevel:20,       none:'주린이', domestic:'존리 개미',     overseas:'워런 개미',     balanced:'올웨더 개미' },
+  { minLevel:21, maxLevel:Infinity, none:'주린이', domestic:'여의도 전설의 여왕개미', overseas:'월가 전설의 여왕개미', balanced:'올웨더 여왕개미' }
 ];
 function computeTitle(level, track) {
   const tier = RANK_TIERS.find(t => level >= t.minLevel && level <= t.maxLevel) || RANK_TIERS[RANK_TIERS.length-1];
