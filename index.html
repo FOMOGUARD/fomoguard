@@ -1707,9 +1707,7 @@ function classifyNewsSentiment(text) {
 function isFreshNewsCache(cached) {
   return !!cached && cached.date === todayStr() && cached.v === NEWS_CACHE_VERSION;
 }
-async function fetchNewsForKeyword(keyword) {
-  const key = state.settings.newsApiKey;
-  if (!key) throw new Error('뉴스 API 키가 등록되어 있지 않습니다.');
+async function fetchNewsForKeywordPaid(keyword, key) {
   const fromDate = new Date(Date.now() - 3*86400000).toISOString();
   let res;
   try {
@@ -1724,22 +1722,46 @@ async function fetchNewsForKeyword(keyword) {
   if (!res.ok) { const t = await res.text(); let msg; try { msg = JSON.parse(t).error; } catch(e) { msg = t; } throw new Error(msg || `뉴스 API 오류 (${res.status})`); }
   const data = await res.json();
   if (!Array.isArray(data.articles)) throw new Error('GNews 응답 형식이 예상과 다릅니다: ' + JSON.stringify(data).slice(0,200));
-  let items = data.articles.map(a => {
-    const title = a.titleKo||a.title||'', description = a.descriptionKo||a.description||'';
-    return { title, url:a.url||'#', source:a.source?.name||'', publishedAt:a.publishedAt||'', description, translated:!!a.translated,
-      sentiment: classifyNewsSentiment(`${a.title||''} ${a.description||''} ${title} ${description}`) };
-  });
+  return {
+    totalFound: data.totalArticles ?? data.articles.length,
+    articles: data.articles.map(a => {
+      const title = a.titleKo||a.title||'', description = a.descriptionKo||a.description||'';
+      return { title, url:a.url||'#', source:a.source?.name||'', publishedAt:a.publishedAt||'', description, translated:!!a.translated };
+    })
+  };
+}
+async function fetchNewsForKeywordFree(keyword) {
+  let res;
+  try {
+    res = await fetch('/news-free', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ keyword }) });
+  } catch (e) {
+    throw new Error('뉴스 서버에 연결하지 못했습니다. 잠시 후 다시 시도해주세요.');
+  }
+  if (!res.ok) { const t = await res.text(); let msg; try { msg = JSON.parse(t).error; } catch(e) { msg = t; } throw new Error(msg || `뉴스 조회 오류 (${res.status})`); }
+  const data = await res.json();
+  if (!Array.isArray(data.articles)) throw new Error('뉴스 응답 형식이 예상과 다릅니다.');
+  return {
+    totalFound: data.totalArticles ?? data.articles.length,
+    articles: data.articles.map(a => ({ title:a.title||'', url:a.url||'#', source:a.source||'', publishedAt:a.publishedAt||'', description:a.description||'', translated:false }))
+  };
+}
+// 이미 본인 GNews 키를 등록한 계정은 그대로 GNews(유료) 경로를 쓰고,
+// 등록하지 않은 계정은 키 없이도 쓸 수 있는 구글 뉴스 무료 경로를 자동으로 쓴다.
+async function fetchNewsForKeyword(keyword) {
+  const key = state.settings.newsApiKey;
+  const { totalFound, articles } = key ? await fetchNewsForKeywordPaid(keyword, key) : await fetchNewsForKeywordFree(keyword);
+  let items = articles.map(a => ({ ...a, sentiment: classifyNewsSentiment(`${a.title||''} ${a.description||''}`) }));
   const cutoff = Date.now() - 3*86400000;
   items = items.filter(it => { const t = Date.parse(it.publishedAt); return !isNaN(t) && t >= cutoff; });
   items.sort((a,b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt));
   items = items.slice(0, 10);
-  items.totalFound = data.totalArticles ?? data.articles.length;
+  items.totalFound = totalFound;
   state.newsCache[keyword] = { date: todayStr(), items, totalFound: items.totalFound, v: NEWS_CACHE_VERSION };
   save(LS.newsCache, state.newsCache);
   return items;
 }
 async function fetchAllNewsKeywords() {
-  if (!state.settings.newsApiKey || !state.newsKeywords.length) return;
+  if (!state.newsKeywords.length) return;
   for (const k of state.newsKeywords) {
     const cached = state.newsCache[k];
     if (isFreshNewsCache(cached)) continue;
@@ -1778,7 +1800,7 @@ renderers.news = function() {
       <button id="news-kw-add" class="btn-brand px-4 rounded-xl text-sm font-bold whitespace-nowrap">추가</button>
     </div>
     ${state.newsKeywords.length ? `<div class="flex gap-1.5 flex-wrap mb-4" id="news-kw-chips"></div>` : `<div class="card p-6 text-center text-sm text-muted mb-4">등록된 관심 키워드가 없습니다. 위에서 추가해보세요.</div>`}
-    ${!state.settings.newsApiKey ? `<div class="card p-4 mb-4 border border-warn/30"><p class="text-xs text-warn">⚠️ 설정에서 뉴스 API 키를 등록해야 실제 뉴스를 불러올 수 있어요.</p></div>` : ''}
+    ${!state.settings.newsApiKey ? `<div class="card p-4 mb-4"><p class="text-xs text-muted">기본 무료 뉴스로 조회하고 있어요. 설정에서 GNews API 키를 등록하면 해외 뉴스 자동 번역 등 더 상세한 뉴스를 볼 수 있어요.</p></div>` : ''}
     ${state.newsKeywords.length ? `<div class="flex gap-1.5 mb-4 row p-1">
       <button data-view="all" class="flex-1 py-2 rounded-lg text-xs font-bold ${newsViewMode==='all'?'bg-brand text-white':'text-muted'}">🗞️ 전체 모아보기</button>
       <button data-view="byKeyword" class="flex-1 py-2 rounded-lg text-xs font-bold ${newsViewMode==='byKeyword'?'bg-brand text-white':'text-muted'}">🔖 키워드별</button>
@@ -1811,7 +1833,6 @@ renderers.news = function() {
 async function loadKeywordNewsData(keyword, forceRefresh) {
   const cached = state.newsCache[keyword];
   if (!forceRefresh && isFreshNewsCache(cached)) { delete newsErrors[keyword]; return; }
-  if (!state.settings.newsApiKey) return;
   try {
     await fetchNewsForKeyword(keyword);
     delete newsErrors[keyword];
@@ -1823,7 +1844,6 @@ function renderNewsFeed() {
   const feed = document.getElementById('news-feed');
   if (!feed) return;
   if (!state.newsKeywords.length) { feed.innerHTML = ''; return; }
-  if (!state.settings.newsApiKey) { feed.innerHTML = ''; return; }
 
   if (newsViewMode === 'all') {
     const merged = [];
@@ -3063,7 +3083,7 @@ renderers.settings = function() {
 
     <div class="card p-4 mb-4">
       <p class="text-sm font-semibold mb-1">📰 뉴스 연동</p>
-      <p class="text-xs text-muted mb-3">더보기 → 실시간 뉴스 탭에서 관심 키워드별 최신 헤드라인·요약을 보려면 GNews의 무료 API 키가 필요합니다. 하루 1회 자동 + 수동 새로고침으로 최근 3일 이내 뉴스만 갱신해드려요. gnews.io에서 무료로 발급받을 수 있어요.</p>
+      <p class="text-xs text-muted mb-3">더보기 → 실시간 뉴스 탭은 키 등록 없이도 기본으로 작동해요. GNews API 키를 등록하면 해외 뉴스까지 자동 번역해서 더 상세하게 볼 수 있습니다. 하루 1회 자동 + 수동 새로고침으로 최근 3일 이내 뉴스만 갱신해드려요. gnews.io에서 무료로 발급받을 수 있어요.</p>
       <label class="text-xs text-muted mb-1 block">GNews API 키</label>
       <input id="st-newskey" type="password" placeholder="발급받은 키 입력" value="${escapeHtml(state.settings.newsApiKey)}">
     </div>
