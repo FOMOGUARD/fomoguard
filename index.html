@@ -91,8 +91,8 @@ tailwind.config = {
   .drag-handle { padding:10px; margin:-10px; cursor:grab; touch-action:none; }
   .drag-handle:active { cursor:grabbing; }
   .drag-bar { width:18px; height:2px; border-radius:1px; background:#5b6272; margin:3px 0; }
-  .dash-section { position:relative; }
-  .dash-editing .dash-section { transition: top .18s ease; touch-action:none; }
+  .dash-section { position:relative; -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
+  .dash-editing .dash-section { position:absolute; left:0; right:0; transition: top .18s ease; touch-action:none; }
   @keyframes dashJiggle { 0%,100% { transform: rotate(-1deg); } 50% { transform: rotate(1deg); } }
   .dash-section.jiggle { animation: dashJiggle .24s ease-in-out infinite; }
   .dash-section.dash-dragging { animation:none !important; transition:none !important; z-index:60; transform: scale(1.03); box-shadow: 0 16px 32px -10px rgba(0,0,0,0.6); }
@@ -2059,7 +2059,6 @@ renderers.dashboard = function() {
     document.getElementById('btn-dash-done').onclick = exitDashEditMode;
     el.querySelectorAll('[data-trash]').forEach(b => b.onclick = (e) => { e.stopPropagation(); dashTrashSection(b.dataset.trash); });
     el.querySelectorAll('[data-restore]').forEach(b => b.onclick = () => dashRestoreSection(b.dataset.restore));
-    dashLayoutStatic();
   } else {
     el.querySelectorAll('[data-goto]').forEach(b => b.onclick = () => switchTab(b.dataset.goto));
     if (document.getElementById('cell-fx')) document.getElementById('cell-fx').onclick = () => refreshMarketData(true);
@@ -2094,47 +2093,49 @@ renderers.dashboard = function() {
     }
   }
 
-  if (!hasData) return;
+  if (hasData) {
+    renderTreemap();
 
-  renderTreemap();
+    const palette = ['#3182f6','#f04452','#00c896','#ffb800','#8b5cf6','#22d3ee','#f472b6','#facc15'];
+    if (chartDonut) chartDonut.destroy();
+    if (chartCore) chartCore.destroy();
+    if (chartTrend) chartTrend.destroy();
 
-  const palette = ['#3182f6','#f04452','#00c896','#ffb800','#8b5cf6','#22d3ee','#f472b6','#facc15'];
-  if (chartDonut) chartDonut.destroy();
-  if (chartCore) chartCore.destroy();
-  if (chartTrend) chartTrend.destroy();
+    if (document.getElementById('chart-donut')) {
+      chartDonut = new Chart(document.getElementById('chart-donut'), {
+        type: 'doughnut',
+        data: { labels: state.portfolio.map(h=>h.name), datasets: [{ data: state.portfolio.map(h=>holdingKRW(h).value), backgroundColor: palette, borderColor:'#141822', borderWidth:2 }] },
+        options: { plugins: { legend: { display:false }, tooltip: { callbacks: { title: () => [], label: (ctx) => ctx.label, afterLabel: (ctx) => fmtWon(ctx.parsed) } } } }
+      });
+      const legendItems = state.portfolio.map((h,i)=>({ name:h.name, val:holdingKRW(h).value, color:palette[i%palette.length] }));
+      const totalV = legendItems.reduce((s,i)=>s+i.val,0) || 1;
+      const shown = legendItems.slice(0,5);
+      document.getElementById('legend-donut').innerHTML = shown.map(it => `<div class="flex items-center gap-1.5 text-[10px]"><span class="w-2 h-2 rounded-full flex-shrink-0" style="background:${it.color}"></span><span class="truncate flex-1">${escapeHtml(it.name)}</span><span class="text-muted">${Math.round(it.val/totalV*100)}%</span></div>`).join('') + (legendItems.length>5 ? `<p class="text-[10px] text-muted">+${legendItems.length-5}개 더</p>` : '');
+    }
 
-  if (document.getElementById('chart-donut')) {
-    chartDonut = new Chart(document.getElementById('chart-donut'), {
-      type: 'doughnut',
-      data: { labels: state.portfolio.map(h=>h.name), datasets: [{ data: state.portfolio.map(h=>holdingKRW(h).value), backgroundColor: palette, borderColor:'#141822', borderWidth:2 }] },
-      options: { plugins: { legend: { display:false }, tooltip: { callbacks: { title: () => [], label: (ctx) => ctx.label, afterLabel: (ctx) => fmtWon(ctx.parsed) } } } }
-    });
-    const legendItems = state.portfolio.map((h,i)=>({ name:h.name, val:holdingKRW(h).value, color:palette[i%palette.length] }));
-    const totalV = legendItems.reduce((s,i)=>s+i.val,0) || 1;
-    const shown = legendItems.slice(0,5);
-    document.getElementById('legend-donut').innerHTML = shown.map(it => `<div class="flex items-center gap-1.5 text-[10px]"><span class="w-2 h-2 rounded-full flex-shrink-0" style="background:${it.color}"></span><span class="truncate flex-1">${escapeHtml(it.name)}</span><span class="text-muted">${Math.round(it.val/totalV*100)}%</span></div>`).join('') + (legendItems.length>5 ? `<p class="text-[10px] text-muted">+${legendItems.length-5}개 더</p>` : '');
+    if (document.getElementById('chart-core')) {
+      chartCore = new Chart(document.getElementById('chart-core'), {
+        type: 'doughnut',
+        data: { labels:['코어','알파'], datasets:[{ data:[coreValue, satValue], backgroundColor:['#3182f6','#00c896'], borderColor:'#141822', borderWidth:2 }] },
+        options: { plugins: { legend: { display:false }, tooltip: { callbacks: { title: () => [], label: (ctx) => ctx.label, afterLabel: (ctx) => fmtWon(ctx.parsed) } } } }
+      });
+      document.getElementById('legend-core').innerHTML = `
+        <div class="flex items-center gap-1.5 text-[10px]"><span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#3182f6"></span><span class="flex-1">코어</span><span class="text-muted">${totalValue>0?Math.round(coreValue/totalValue*100):0}%</span></div>
+        <div class="flex items-center gap-1.5 text-[10px]"><span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#00c896"></span><span class="flex-1">알파</span><span class="text-muted">${totalValue>0?Math.round(satValue/totalValue*100):0}%</span></div>
+      `;
+    }
+
+    if (state.snapshots.length > 1 && document.getElementById('chart-trend')) {
+      const recent = state.snapshots.slice(-30);
+      chartTrend = new Chart(document.getElementById('chart-trend'), {
+        type: 'line',
+        data: { labels: recent.map(s=>s.date.slice(5)), datasets:[{ label:'평가금액', data: recent.map(s=>s.totalValue), borderColor:'#3182f6', backgroundColor:'rgba(49,130,246,0.1)', fill:true, tension:.3 }] },
+        options: { plugins:{ legend:{ display:false } }, scales:{ x:{ ticks:{ color:'#8b93a7' }, grid:{ color:'#1b202c' } }, y:{ ticks:{ color:'#8b93a7' }, grid:{ color:'#1b202c' } } } }
+      });
+    }
   }
 
-  if (document.getElementById('chart-core')) {
-    chartCore = new Chart(document.getElementById('chart-core'), {
-      type: 'doughnut',
-      data: { labels:['코어','알파'], datasets:[{ data:[coreValue, satValue], backgroundColor:['#3182f6','#00c896'], borderColor:'#141822', borderWidth:2 }] },
-      options: { plugins: { legend: { display:false }, tooltip: { callbacks: { title: () => [], label: (ctx) => ctx.label, afterLabel: (ctx) => fmtWon(ctx.parsed) } } } }
-    });
-    document.getElementById('legend-core').innerHTML = `
-      <div class="flex items-center gap-1.5 text-[10px]"><span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#3182f6"></span><span class="flex-1">코어</span><span class="text-muted">${totalValue>0?Math.round(coreValue/totalValue*100):0}%</span></div>
-      <div class="flex items-center gap-1.5 text-[10px]"><span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#00c896"></span><span class="flex-1">알파</span><span class="text-muted">${totalValue>0?Math.round(satValue/totalValue*100):0}%</span></div>
-    `;
-  }
-
-  if (state.snapshots.length > 1 && document.getElementById('chart-trend')) {
-    const recent = state.snapshots.slice(-30);
-    chartTrend = new Chart(document.getElementById('chart-trend'), {
-      type: 'line',
-      data: { labels: recent.map(s=>s.date.slice(5)), datasets:[{ label:'평가금액', data: recent.map(s=>s.totalValue), borderColor:'#3182f6', backgroundColor:'rgba(49,130,246,0.1)', fill:true, tension:.3 }] },
-      options: { plugins:{ legend:{ display:false } }, scales:{ x:{ ticks:{ color:'#8b93a7' }, grid:{ color:'#1b202c' } }, y:{ ticks:{ color:'#8b93a7' }, grid:{ color:'#1b202c' } } } }
-    });
-  }
+  if (dashEditMode) dashLayoutStatic();
 };
 
 /* ================= FACT CHECK (포모체크) ================= */
