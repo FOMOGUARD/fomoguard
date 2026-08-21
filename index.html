@@ -148,13 +148,14 @@ tailwind.config = {
   <header class="px-5 pt-6 pb-3">
     <div class="flex items-center gap-1">
       <button id="btn-back" class="hidden w-8 h-8 -ml-1.5 mr-0.5 rounded-full items-center justify-center text-xl text-[#c6cbd9] flex-shrink-0">←</button>
-      <button id="btn-home" class="flex items-center gap-2 flex-1 text-left">
+      <button id="btn-home" class="flex items-center gap-2 flex-1 text-left min-w-0">
         <img src="/mascot/face-B.png" alt="" class="w-8 h-8 object-contain flex-shrink-0">
-        <div>
+        <div class="min-w-0">
           <h1 class="font-extrabold text-lg leading-none tracking-tight">투자워워</h1>
           <p class="text-[11px] text-muted leading-none mt-1.5">쉽고 편하게, 나만의 투자 집사</p>
         </div>
       </button>
+      <button id="btn-level-badge" class="hidden badge bg-brand/15 text-brand font-bold flex-shrink-0 whitespace-nowrap"></button>
     </div>
   </header>
 
@@ -168,6 +169,7 @@ tailwind.config = {
     <section id="panel-more" class="tab-panel hidden"></section>
     <section id="panel-taborder" class="tab-panel hidden"></section>
     <section id="panel-news" class="tab-panel hidden"></section>
+    <section id="panel-growth" class="tab-panel hidden"></section>
   </main>
 
   <nav id="bottom-nav" class="bottom-nav bg-[#0b0e14]/95 backdrop-blur border-t border-line flex items-stretch px-1 pt-1.5 pb-[calc(env(safe-area-inset-bottom)+6px)]"></nav>
@@ -194,14 +196,15 @@ const LS = {
   newsKeywords: 'fomoguard_news_keywords',
   newsCache: 'fomoguard_news_cache',
   profile: 'fomoguard_profile',
-  cashFlows: 'fomoguard_cash_flows'
+  cashFlows: 'fomoguard_cash_flows',
+  growth: 'fomoguard_growth'
 };
 function load(key, fallback) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch(e) { return fallback; } }
 function save(key, val) { localStorage.setItem(key, JSON.stringify(val)); if (typeof SYNCABLE_KEYS !== 'undefined' && SYNCABLE_KEYS.has(key)) scheduleCloudSync(); }
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(16).slice(2));
 
 const CENTER_TAB = 'factcheck';
-const REORDERABLE = ['dashboard','portfolio','journal','principles','settings','news'];
+const REORDERABLE = ['dashboard','portfolio','journal','principles','settings','news','growth'];
 
 /* ================= AI PROVIDERS (멀티 AI 연동 + 키 자동인식) ================= */
 const AI_PROVIDERS = {
@@ -260,6 +263,7 @@ let state = {
   newsCache: load(LS.newsCache, {}),
   cashFlows: load(LS.cashFlows, []),
   profile: load(LS.profile, null),
+  growth: load(LS.growth, { xp:0, lastLoginXpDate:null, fcXpDate:null, fcXpCount:0, journalXpDate:null, journalXpCount:0, quizAnsweredDate:null, quizCorrect:null }),
   settings: load(LS.settings, { provider:'claude', apiKeys:{claude:'',gemini:'',openai:'',grok:''}, models:{claude:'claude-sonnet-5',gemini:'gemini-3.6-flash',openai:'gpt-4.1',grok:'grok-4'}, twelveDataKey:'', newsApiKey:'', tabOrder: REORDERABLE.slice() })
 };
 function sanitizeSettings() {
@@ -350,7 +354,7 @@ const SUPABASE_ANON_KEY = 'sb_publishable_4raTyA00kKvm_rSveM336w_uncSPaNA';
 function isSupabaseConfigured() { return !SUPABASE_URL.includes('YOUR-PROJECT') && !SUPABASE_ANON_KEY.includes('YOUR-ANON'); }
 let supabaseClient = null;
 let currentUser = null;
-const SYNCABLE_KEYS = new Set([LS.principles, LS.portfolio, LS.journal, LS.transactions, LS.factchecks, LS.snapshots, LS.newsKeywords, LS.cashFlows, LS.settings]);
+const SYNCABLE_KEYS = new Set([LS.principles, LS.portfolio, LS.journal, LS.transactions, LS.factchecks, LS.snapshots, LS.newsKeywords, LS.cashFlows, LS.settings, LS.growth]);
 let cloudSyncTimer = null;
 function scheduleCloudSync() {
   if (!supabaseClient || !currentUser) return;
@@ -359,7 +363,7 @@ function scheduleCloudSync() {
 }
 async function pushToCloud() {
   if (!supabaseClient || !currentUser) return;
-  const payload = { principles: state.principles, portfolio: state.portfolio, journal: state.journal, transactions: state.transactions, factchecks: state.factchecks, snapshots: state.snapshots, newsKeywords: state.newsKeywords, cashFlows: state.cashFlows, settings: state.settings };
+  const payload = { principles: state.principles, portfolio: state.portfolio, journal: state.journal, transactions: state.transactions, factchecks: state.factchecks, snapshots: state.snapshots, newsKeywords: state.newsKeywords, cashFlows: state.cashFlows, settings: state.settings, growth: state.growth };
   const { error } = await supabaseClient.from('fomoguard_data').upsert({ user_id: currentUser.id, data: payload, updated_at: new Date().toISOString() });
   if (!error) localStorage.setItem('fomoguard_last_cloud_sync', String(Date.now()));
 }
@@ -377,6 +381,7 @@ async function pullFromCloud() {
     if (d.newsKeywords) { state.newsKeywords = d.newsKeywords; save(LS.newsKeywords, state.newsKeywords); }
     if (d.cashFlows) { state.cashFlows = d.cashFlows; save(LS.cashFlows, state.cashFlows); }
     if (d.settings) { state.settings = d.settings; sanitizeSettings(); save(LS.settings, state.settings); }
+    if (d.growth) { state.growth = d.growth; save(LS.growth, state.growth); }
     localStorage.setItem('fomoguard_last_cloud_sync', String(Date.now()));
     if (renderers[currentTab]) renderers[currentTab]();
   } else {
@@ -401,6 +406,8 @@ async function handleSupabaseSession(session, isNewSignIn) {
   renderHeaderProfile();
   if (localStorage.getItem('fomoguard_demo_seed') === '1') clearDemoData();
   await pullFromCloud();
+  grantDailyLoginXp();
+  renderHeaderProfile();
   if (isNewSignIn) { hideWelcomeOverlay(); showWelcomeGreeting(state.profile.name); maybeShowTutorial(); }
   if (currentTab === 'settings') renderers.settings();
 }
@@ -448,11 +455,17 @@ function showWelcomeGreeting(name) {
 }
 function renderHeaderProfile() {
   const wrap = document.getElementById('btn-home');
+  const badge = document.getElementById('btn-level-badge');
   if (state.profile) {
-    wrap.innerHTML = `${state.profile.picture ? `<img src="${escapeHtml(state.profile.picture)}" class="w-8 h-8 rounded-full flex-shrink-0">` : `<img src="/mascot/face-B.png" alt="" class="w-8 h-8 object-contain flex-shrink-0">`}<div><h1 class="font-extrabold text-lg leading-none tracking-tight">투자워워</h1><p class="text-[11px] text-brand leading-none mt-1.5 font-semibold">${escapeHtml(state.profile.name)}님, 오늘도 원칙대로 🧊</p></div>`;
+    wrap.innerHTML = `${state.profile.picture ? `<img src="${escapeHtml(state.profile.picture)}" class="w-8 h-8 rounded-full flex-shrink-0">` : `<img src="/mascot/face-B.png" alt="" class="w-8 h-8 object-contain flex-shrink-0">`}<div class="min-w-0"><h1 class="font-extrabold text-lg leading-none tracking-tight truncate">${escapeHtml(state.profile.name)}님</h1><p class="text-[11px] text-brand leading-none mt-1.5 font-semibold">오늘도 원칙대로 🧊</p></div>`;
+    const gs = computeGrowthStatus();
+    badge.textContent = `Lv.${gs.level} ${gs.title}`;
+    badge.classList.remove('hidden');
   } else {
     wrap.innerHTML = `<img src="/mascot/face-B.png" alt="" class="w-8 h-8 object-contain flex-shrink-0"><div><h1 class="font-extrabold text-lg leading-none tracking-tight">투자워워</h1><p class="text-[11px] text-muted leading-none mt-1.5">쉽고 편하게, 나만의 투자 집사</p></div>`;
+    badge.classList.add('hidden');
   }
+  badge.onclick = () => switchTab('growth');
 }
 function hideWelcomeOverlay() {
   const ov = document.getElementById('welcome-overlay');
@@ -689,7 +702,8 @@ const TAB_META = {
   journal: { label:'투자일지', icon:'📓', color:'#ec4899' },
   principles: { label:'투자원칙', icon:'📜', color:'#8b5cf6' },
   settings: { label:'설정', icon:'⚙️', color:'#64748b' },
-  news: { label:'실시간 뉴스', icon:'📰', color:'#14b8a6' }
+  news: { label:'실시간 뉴스', icon:'📰', color:'#14b8a6' },
+  growth: { label:'성장', icon:'🌱', color:'#22c55e' }
 };
 function iconBadge(emoji, color, size) {
   size = size || 40;
@@ -1270,6 +1284,126 @@ function computeTotalPnl() {
   const totalDeployedCost = totalCost + realized.costBasis;
   const totalPnlPct = totalDeployedCost>0 ? totalPnl/totalDeployedCost*100 : 0;
   return { unrealizedPnl, realizedPnl: realized.pnl, totalPnl, totalDeployedCost, totalPnlPct };
+}
+/* ================= 성장 시스템 (레벨 · 계열 칭호 · 오늘의 유형 · 하루 1문제) ================= */
+function xpForLevel(n) { return Math.round(30*Math.pow(n,1.6)) + 20; } // n레벨에서 n+1레벨로 가는 데 필요한 경험치 (뒤로 갈수록 가파르게 증가)
+function computeLevelFromXp(xp) {
+  let level = 1, remaining = xp, need = xpForLevel(1);
+  while (remaining >= need) { remaining -= need; level++; need = xpForLevel(level); }
+  return { level, xpIntoLevel: remaining, xpForNext: need };
+}
+function computeCurrencyMix() {
+  let krw = 0, usd = 0;
+  state.portfolio.forEach(h => { const v = holdingKRW(h).value; if (h.currency === 'USD') usd += v; else krw += v; });
+  const total = krw + usd;
+  return { krw, usd, total, usdRatio: total > 0 ? usd/total : 0 };
+}
+function computeTrack() {
+  const { total, usdRatio } = computeCurrencyMix();
+  if (total <= 0) return 'none';
+  if (usdRatio >= 0.6) return 'overseas';
+  if (usdRatio <= 0.4) return 'domestic';
+  return 'balanced';
+}
+const RANK_TIERS = [
+  { minLevel:1,  maxLevel:2,        none:'주린이', domestic:'주린이',              overseas:'주린이',              balanced:'주린이' },
+  { minLevel:3,  maxLevel:5,        none:'주린이', domestic:'동학개미 새싹',        overseas:'서학개미 새싹',        balanced:'밸런스 개미' },
+  { minLevel:6,  maxLevel:9,        none:'주린이', domestic:'동학개미',             overseas:'서학개미',             balanced:'올라운드 개미' },
+  { minLevel:10, maxLevel:14,       none:'주린이', domestic:'동학개미 고인물',      overseas:'서학개미 고인물',      balanced:'밸런스 마스터' },
+  { minLevel:15, maxLevel:20,       none:'주린이', domestic:'국장의 신',            overseas:'월가의 개미',          balanced:'자산배분의 정석' },
+  { minLevel:21, maxLevel:Infinity, none:'주린이', domestic:'여의도 전설',          overseas:'나스닥 전설',          balanced:'투자계의 현자' }
+];
+function computeTitle(level, track) {
+  const tier = RANK_TIERS.find(t => level >= t.minLevel && level <= t.maxLevel) || RANK_TIERS[RANK_TIERS.length-1];
+  return tier[track] || tier.none;
+}
+function computeGrowthStatus() {
+  const { level, xpIntoLevel, xpForNext } = computeLevelFromXp(state.growth.xp);
+  const track = computeTrack();
+  const title = computeTitle(level, track);
+  return { level, xpIntoLevel, xpForNext, track, title, totalXp: state.growth.xp };
+}
+function computeVibeBadge() {
+  const holdings = state.portfolio;
+  if (holdings.length) {
+    const lossCount = holdings.filter(h => { const ret = h.avgPrice>0 ? (h.currentPrice-h.avgPrice)/h.avgPrice : 0; return ret < 0; }).length;
+    if (lossCount / holdings.length >= 0.6) return { emoji:'🔵', title:'파란불 수집가', desc:'보유 종목 대부분이 마이너스예요. 원칙을 다시 점검해볼 시간일지도 몰라요.' };
+  }
+  const recentFc = state.factchecks.slice(-5);
+  if (recentFc.length >= 3) {
+    const badCount = recentFc.filter(f => f.result?.verdict === '위배').length;
+    if (badCount / recentFc.length >= 0.6) return { emoji:'🦋', title:'불나방', desc:'최근 포모체크에서 "위배" 판정이 많았어요. 불빛(급등)을 쫓다 다치기 쉬워요.' };
+  }
+  const weekAgo = Date.now() - 7*86400000;
+  const recentTx = state.transactions.filter(t => Date.parse(t.date) >= weekAgo);
+  if (recentTx.length >= 6) return { emoji:'🐒', title:'침팬치', desc:'최근 일주일 매매가 잦아요. 손이 먼저 나가고 있는 건 아닌지 체크해보세요.' };
+  return { emoji:'🧊', title:'냉철 개미', desc:'최근 흐름이 안정적이에요. 지금처럼만 하면 됩니다.' };
+}
+function grantXp(amount, toastMsg) {
+  state.growth.xp += amount;
+  save(LS.growth, state.growth);
+  if (toastMsg) toast(toastMsg, 'success');
+}
+function grantDailyLoginXp() {
+  const today = todayStr();
+  if (state.growth.lastLoginXpDate === today) return;
+  state.growth.lastLoginXpDate = today;
+  grantXp(10, '오늘의 첫 접속! +10 EXP 🌱');
+}
+function grantFactCheckXp() {
+  const today = todayStr();
+  if (state.growth.fcXpDate !== today) { state.growth.fcXpDate = today; state.growth.fcXpCount = 0; }
+  if (state.growth.fcXpCount >= 3) return;
+  state.growth.fcXpCount++;
+  grantXp(15, '포모체크 완료! +15 EXP 🧊');
+}
+function grantJournalXp() {
+  const today = todayStr();
+  if (state.growth.journalXpDate !== today) { state.growth.journalXpDate = today; state.growth.journalXpCount = 0; }
+  if (state.growth.journalXpCount >= 3) return;
+  state.growth.journalXpCount++;
+  grantXp(15, '투자일지 작성! +15 EXP 📓');
+}
+/* 검증된 사실 기반 문제만 수록 (매일 1문제, 날짜 기준 고정 노출) */
+const QUIZ_BANK = [
+  { q:'PER(주가수익비율)이 낮다는 것은 일반적으로 무엇을 의미하나요?', options:['주가가 순이익에 비해 상대적으로 저평가되었을 가능성이 있다','회사가 적자 상태다','배당을 많이 준다는 뜻이다','시가총액이 크다는 뜻이다'], answer:0, explain:'PER = 주가 ÷ 주당순이익(EPS). 낮으면 이익 대비 주가가 싼 편이지만, 업종·성장성에 따라 다르게 해석해야 해요.' },
+  { q:'PBR(주가순자산비율)이 1보다 작다는 것은 무엇을 뜻하나요?', options:['주가가 회사의 장부상 순자산가치보다 낮게 거래되고 있다는 뜻','회사가 상장폐지된다는 뜻','배당이 없다는 뜻','부채가 전혀 없다는 뜻'], answer:0, explain:'PBR = 주가 ÷ 주당순자산(BPS). 1 미만이면 이론상 청산가치보다 싸지만, 저평가엔 나름의 이유가 있는 경우도 많아요.' },
+  { q:'시가총액은 어떻게 계산하나요?', options:['주가 × 발행주식수','매출액 × 영업이익률','자본금 ÷ 액면가','당기순이익 × PER'], answer:0, explain:'시가총액은 현재 주가에 전체 발행주식수를 곱한 값으로, 회사의 시장 가치를 나타내요.' },
+  { q:'코스피(KOSPI)와 코스닥(KOSDAQ)의 차이로 옳은 것은?', options:['코스피는 대형·우량주 중심, 코스닥은 중소·벤처기업 중심 시장이다','코스피는 미국 시장, 코스닥은 한국 시장이다','코스피는 채권 시장이다','코스닥은 코스피의 하위 지수일 뿐이다'], answer:0, explain:'코스피와 코스닥은 각각 별도로 운영되는 한국의 증권시장이에요.' },
+  { q:'호가(呼價)란 무엇을 뜻하나요?', options:['사려는 사람과 팔려는 사람이 제시하는 매수·매도 희망 가격','회사가 발표하는 목표주가','세금이 포함된 최종 가격','전날 종가'], answer:0, explain:'호가창에는 여러 가격대별 매수/매도 주문 수량이 표시돼요.' },
+  { q:'시가와 종가는 각각 무엇을 뜻하나요?', options:['시가는 장이 시작할 때 첫 체결가, 종가는 마감할 때 마지막 체결가다','시가는 어제 가격, 종가는 오늘 가격이다','시가는 최고가, 종가는 최저가다','둘 다 같은 뜻이다'], answer:0, explain:'하루 중 가장 먼저 체결된 가격이 시가, 가장 마지막에 체결된 가격이 종가예요.' },
+  { q:'상한가/하한가란 무엇인가요?', options:['하루 동안 오르거나 내릴 수 있는 가격의 최대 제한선','상장 첫날의 가격','배당 기준 가격','세금이 부과되는 기준 가격'], answer:0, explain:'한국 증시(코스피·코스닥)는 전일 종가 대비 ±30%로 하루 가격 변동폭이 제한돼 있어요.' },
+  { q:'"매도"의 뜻으로 옳은 것은?', options:['가지고 있는 주식을 파는 것','주식을 새로 사는 것','배당금을 받는 것','주식을 무상으로 받는 것'], answer:0, explain:'반대로 주식을 사는 것은 "매수"라고 해요.' },
+  { q:'손절(손절매)이란?', options:['손실을 더 키우지 않기 위해 손해를 보더라도 매도하는 것','손실 없이 매도하는 것','이익을 실현하는 것','배당을 포기하는 것'], answer:0, explain:'미리 정한 원칙에 따라 손실을 제한하는 것이 손절의 핵심이에요.' },
+  { q:'익절이란?', options:['이익이 난 상태에서 매도해 수익을 실현하는 것','손실 상태에서 매도하는 것','주식을 추가로 매수하는 것','세금을 줄이는 것'], answer:0, explain:'평가이익을 실제 실현이익으로 확정하는 매도를 뜻해요.' },
+  { q:'배당수익률이란?', options:['주가 대비 1년간 받는 배당금의 비율','회사의 연 매출 성장률','순이익률','주식 보유 기간'], answer:0, explain:'배당수익률 = 주당 배당금 ÷ 현재 주가 × 100.' },
+  { q:'ETF(상장지수펀드)란?', options:['특정 지수나 자산군을 추종하며 거래소에서 주식처럼 매매되는 펀드','정부가 발행하는 채권','개별 기업이 발행하는 회사채','예금자보호가 되는 예금 상품'], answer:0, explain:'ETF는 여러 종목을 한 번에 담아 분산투자 효과를 주면서도 실시간 매매가 가능해요.' },
+  { q:'분산투자를 하는 가장 큰 이유는 무엇인가요?', options:['한 종목·자산에 문제가 생겨도 전체 손실을 줄이기 위해','세금을 줄이기 위해','매매 수수료를 아끼기 위해','배당을 더 많이 받기 위해'], answer:0, explain:'"달걀을 한 바구니에 담지 마라"는 격언이 바로 분산투자를 설명해요.' },
+  { q:'재무제표 중 "손익계산서"가 보여주는 것은?', options:['일정 기간 동안 회사가 얼마나 벌고 썼는지(매출·비용·이익)','특정 시점의 자산과 부채 현황','주주명부','배당 이력'], answer:0, explain:'특정 시점의 자산·부채·자본 현황을 보여주는 건 "재무상태표"예요.' },
+  { q:'재무제표 중 "재무상태표(대차대조표)"가 보여주는 것은?', options:['특정 시점 기준 회사의 자산, 부채, 자본 현황','1년 동안의 매출과 이익','현금이 어디서 들어오고 나갔는지','주가의 변동 추이'], answer:0, explain:'재무상태표는 특정 "시점"의 스냅샷, 손익계산서는 일정 "기간"의 흐름을 보여준다는 차이가 있어요.' },
+  { q:'영업이익과 당기순이익의 차이는?', options:['영업이익은 본업에서 번 이익, 당기순이익은 영업외손익·세금까지 반영한 최종 이익','영업이익이 항상 당기순이익보다 작다','둘은 완전히 같은 개념이다','당기순이익은 세금을 반영하지 않는다'], answer:0, explain:'영업이익 → (영업외손익 반영) → 세전이익 → (세금 차감) → 당기순이익 순서예요.' },
+  { q:'ROE(자기자본이익률)란?', options:['자기자본 대비 얼마나 효율적으로 이익을 냈는지 보여주는 지표','회사가 보유한 현금의 총액','부채비율 지표','배당 성향'], answer:0, explain:'ROE = 당기순이익 ÷ 자기자본 × 100.' },
+  { q:'우선주는 보통주와 비교했을 때 일반적으로 어떤 특징이 있나요?', options:['의결권이 없는 대신 배당 등에서 우선적 권리를 갖는 경우가 많다','의결권이 두 배로 많다','항상 보통주보다 주가가 더 높다','상장이 금지되어 있다'], answer:0, explain:'"우선"이라는 이름처럼 배당·잔여재산 분배 등에서 우선권을 갖는 대신 의결권이 없는 게 일반적이에요.' },
+  { q:'액면분할이란?', options:['주식 1주를 여러 주로 쪼개 주당 가격을 낮추고 유통 주식수를 늘리는 것','회사를 여러 개로 분할하는 것','배당을 여러 번 나눠 지급하는 것','세금을 분할 납부하는 것'], answer:0, explain:'액면분할은 회사의 시가총액 자체를 바꾸지 않아요. 주당 가격만 낮아지고 주식수가 늘어날 뿐이에요.' },
+  { q:'유상증자란?', options:['회사가 새 주식을 발행해 투자자에게 돈을 받고 자본을 늘리는 것','회사가 주식을 무료로 나눠주는 것','배당을 늘리는 것','자사주를 매입해 소각하는 것'], answer:0, explain:'유상증자는 투자자가 실제로 돈을 내고 새 주식을 받는 방식이에요.' },
+  { q:'무상증자란?', options:['회사가 주주에게 대가 없이 새 주식을 나눠주는 것','투자자에게 돈을 받고 새 주식을 발행하는 것','배당금을 현금 대신 주식으로 주는 것','회사가 파산했을 때 하는 절차'], answer:0, explain:'보통 잉여금을 자본금으로 전환해 진행하며, 배당금을 주식으로 주는 "주식배당"과는 다른 제도예요.' },
+  { q:'공매도란?', options:['주식을 빌려서 먼저 팔고 나중에 사서 갚는 방식으로, 주가 하락에 베팅하는 거래','주식을 대량으로 매수하는 것','상장 전에 미리 파는 것','배당을 미리 받는 것'], answer:0, explain:'주가가 떨어져야 이익을 보는 구조라, 하락에 베팅하는 대표적인 방법이에요.' },
+  { q:'서킷브레이커란?', options:['주가지수가 급락할 때 일시적으로 모든 거래를 중단시키는 제도','특정 종목의 상장을 영구 폐지하는 제도','세금을 자동으로 계산해주는 시스템','배당금을 자동 재투자하는 기능'], answer:0, explain:'시장 전체의 과도한 패닉을 진정시키기 위한 안전장치예요.' },
+  { q:'거래량이 급증하면서 주가도 크게 오를 때 흔히 하는 조언은?', options:['왜 오르는지(호재의 실체)를 먼저 확인하고, 뇌동매매를 피하는 것이 좋다','무조건 따라 사는 것이 정답이다','거래량은 주가와 아무 상관이 없다','거래량이 늘면 반드시 하락한다'], answer:0, explain:'급등의 이유를 모른 채 따라 사는 것이 대표적인 뇌동매매·FOMO 매수예요.' }
+];
+function todayQuiz() {
+  const idx = Math.floor(Date.now()/86400000) % QUIZ_BANK.length;
+  return QUIZ_BANK[idx];
+}
+function submitQuizAnswer(selectedIdx) {
+  const quiz = todayQuiz();
+  const today = todayStr();
+  const correct = selectedIdx === quiz.answer;
+  state.growth.quizAnsweredDate = today;
+  state.growth.quizCorrect = correct;
+  save(LS.growth, state.growth);
+  if (correct) grantXp(25, '오늘의 퀴즈 정답! +25 EXP 🌱');
+  if (renderers.growth) renderers.growth();
 }
 function holdingRealizedPnL(holdingId) {
   let sum = 0;
@@ -1972,6 +2106,7 @@ async function runFactCheck() {
     const record = { id: uid(), date: todayStr(), ticker, amount: amount ? +amount : null, reason, result };
     state.factchecks.push(record);
     save(LS.factchecks, state.factchecks);
+    grantFactCheckXp();
 
     renderers.factcheck();
     renderFactCheckResult(result, record);
@@ -2625,6 +2760,7 @@ function openJournalForm(existing) {
       Object.assign(existing, { date, mood, title, content, photos: pendingPhotos, hashtags });
     } else {
       state.journal.push({ id: uid(), date, mood, title, content, photos: pendingPhotos, hashtags });
+      grantJournalXp();
     }
     state.journal.sort((a,b)=>a.date.localeCompare(b.date));
     save(LS.journal, state.journal);
@@ -2861,6 +2997,63 @@ renderers.more = function() {
   if (!state.profile) renderGoogleButton('more-google-wrap');
 };
 
+/* ================= 성장 탭 ================= */
+renderers.growth = function() {
+  const el = document.getElementById('panel-growth');
+  const gs = computeGrowthStatus();
+  const vibe = computeVibeBadge();
+  const pct = gs.xpForNext > 0 ? Math.min(100, Math.round(gs.xpIntoLevel/gs.xpForNext*100)) : 0;
+  const quiz = todayQuiz();
+  const answeredToday = state.growth.quizAnsweredDate === todayStr();
+  el.innerHTML = `
+    <h2 class="font-bold text-xl mt-2 mb-1">🌱 성장</h2>
+    <p class="text-xs text-muted mb-4">매일 조금씩 배우고, 활동할수록 레벨이 오릅니다. 초반엔 금방 오르지만 갈수록 더 많은 경험치가 필요해요.</p>
+
+    <div class="hero-card rounded-[26px] p-5 mb-4">
+      <div class="flex items-center gap-3 mb-3">
+        <img src="/mascot/face-F.png" alt="" class="w-14 h-14 object-contain flex-shrink-0">
+        <div class="flex-1 min-w-0">
+          <p class="text-xl font-extrabold">Lv.${gs.level} <span class="text-brand">${escapeHtml(gs.title)}</span></p>
+          <p class="text-[11px] text-muted mt-0.5">누적 경험치 ${gs.totalXp.toLocaleString()} EXP</p>
+        </div>
+      </div>
+      <div class="w-full h-2.5 rounded-full bg-line overflow-hidden">
+        <div class="h-full bg-brand rounded-full" style="width:${pct}%"></div>
+      </div>
+      <p class="text-[10px] text-muted mt-1.5 text-right">다음 레벨까지 ${(gs.xpForNext-gs.xpIntoLevel).toLocaleString()} EXP (${gs.xpIntoLevel}/${gs.xpForNext})</p>
+    </div>
+
+    <div class="row p-4 mb-4 flex items-center gap-3">
+      <span class="text-3xl flex-shrink-0">${vibe.emoji}</span>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-bold">오늘의 유형 · ${escapeHtml(vibe.title)}</p>
+        <p class="text-xs text-muted mt-0.5">${escapeHtml(vibe.desc)}</p>
+      </div>
+    </div>
+
+    <div class="card p-4 mb-4">
+      <p class="text-sm font-semibold mb-3">📚 오늘의 투자 상식 퀴즈</p>
+      <p class="text-sm mb-3">${escapeHtml(quiz.q)}</p>
+      <div id="quiz-options" class="space-y-2 mb-2">
+        ${quiz.options.map((o,i) => `<button data-qi="${i}" class="row p-3 w-full text-left text-sm quiz-opt" ${answeredToday?'disabled':''}>${escapeHtml(o)}</button>`).join('')}
+      </div>
+      <div id="quiz-feedback">${answeredToday ? `
+        <p class="text-sm font-bold ${state.growth.quizCorrect?'text-good':'text-bad'} mt-2">${state.growth.quizCorrect?'✅ 정답이에요!':'❌ 아쉬워요, 정답은 "'+escapeHtml(quiz.options[quiz.answer])+'" 이에요.'}</p>
+        <p class="text-xs text-muted mt-1">${escapeHtml(quiz.explain)}</p>
+        <p class="text-[11px] text-muted mt-2">내일 새로운 문제가 나와요.</p>
+      ` : ''}</div>
+    </div>
+
+    <div class="card p-4 mb-4">
+      <p class="text-sm font-semibold mb-2">🏅 계열 칭호 안내</p>
+      <p class="text-xs text-muted leading-relaxed">보유 종목의 원화·달러 비중에 따라 계열이 정해져요. 국내 비중이 높으면 <b class="text-[#eef1f7]">동학개미</b> 계열, 해외 비중이 높으면 <b class="text-[#eef1f7]">서학개미</b> 계열, 비슷하게 섞여있으면 <b class="text-[#eef1f7]">밸런스</b> 계열이에요. 레벨이 오를수록 같은 계열 안에서도 칭호가 더 고급스러워집니다.</p>
+    </div>
+  `;
+  if (!answeredToday) {
+    el.querySelectorAll('.quiz-opt').forEach(b => b.onclick = () => submitQuizAnswer(+b.dataset.qi));
+  }
+};
+
 /* ================= TAB ORDER EDITOR ================= */
 const TABORDER_ROW_H = 64, TABORDER_GAP = 8;
 renderers.taborder = function() {
@@ -2955,6 +3148,7 @@ renderers.taborder = function() {
 /* ---------------- init ---------------- */
 async function init() {
   snapshotToday();
+  grantDailyLoginXp();
   renderHeaderProfile();
   await initSupabaseAuth();
   if (!state.profile && !localStorage.getItem('fomoguard_onboarded')) {
