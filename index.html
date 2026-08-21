@@ -1574,24 +1574,59 @@ async function syncStockPrices() {
   save(LS.portfolio, state.portfolio);
   return { ok, fail, skipped:false };
 }
-async function fetchMarketSnapshot() {
+// 종목 시세 조회 - Twelve Data 키가 있으면 그걸 우선 쓰고, 없거나 실패하면
+// API 키 등록 없이도 쓸 수 있는 무료 경로(/price-free, Yahoo Finance 기반)로 대체한다.
+async function fetchLivePrice(ticker, exchange) {
   const key = state.settings.twelveDataKey;
-  if (!key) return null;
+  if (key) {
+    try {
+      let url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(ticker)}&apikey=${encodeURIComponent(key)}`;
+      if (exchange) url += `&exchange=${encodeURIComponent(exchange)}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.close && !isNaN(+data.close)) return { price:+data.close, changePct:+(data.percent_change||0), source:'twelvedata' };
+    } catch(e) {}
+  }
+  try {
+    const res = await fetch('/price-free', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ ticker, market: exchange==='KRX'?'KRX':'US' }) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.price) return { price:+data.price, changePct: data.changePct!=null?+data.changePct:undefined, source:'free' };
+    }
+  } catch(e) {}
+  return null;
+}
+async function fetchIndexQuote(freeMarket, twelveDataSymbol, twelveDataExchange) {
+  const key = state.settings.twelveDataKey;
+  if (key) {
+    try {
+      let url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(twelveDataSymbol)}&apikey=${encodeURIComponent(key)}`;
+      if (twelveDataExchange) url += `&exchange=${encodeURIComponent(twelveDataExchange)}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.close) return { close:+data.close, pct:+(data.percent_change||0) };
+    } catch(e) {}
+  }
+  try {
+    const res = await fetch('/price-free', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ market: freeMarket }) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.price) return { close:+data.price, pct: data.changePct!=null?+data.changePct:0 };
+    }
+  } catch(e) {}
+  return null;
+}
+async function fetchMarketSnapshot() {
   const symbols = [
-    { label:'코스피', symbol:'KOSPI', exchange:'KRX' },
-    { label:'S&P500(SPY)', symbol:'SPY', exchange:'' },
-    { label:'나스닥(QQQ)', symbol:'QQQ', exchange:'' }
+    { label:'코스피', symbol:'KOSPI', exchange:'KRX', freeMarket:'index-kospi' },
+    { label:'S&P500(SPY)', symbol:'SPY', exchange:'', freeMarket:'index-sp500' },
+    { label:'나스닥(QQQ)', symbol:'QQQ', exchange:'', freeMarket:'index-nasdaq' }
   ];
   const items = [];
   for (const s of symbols) {
-    let url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(s.symbol)}&apikey=${encodeURIComponent(key)}`;
-    if (s.exchange) url += `&exchange=${encodeURIComponent(s.exchange)}`;
-    try {
-      const res = await fetch(url);
-      const data = await res.json();
-      if (data.close) items.push({ label:s.label, close:+data.close, pct:+(data.percent_change||0) });
-    } catch(e) {}
-    await new Promise(r=>setTimeout(r, 600));
+    const q = await fetchIndexQuote(s.freeMarket, s.symbol, s.exchange);
+    if (q) items.push({ label:s.label, close:q.close, pct:q.pct });
+    await new Promise(r=>setTimeout(r, 400));
   }
   if (items.length) { state.marketSnapshot = { date: todayStr(), items }; save(LS.market, state.marketSnapshot); }
   return items;
@@ -1605,7 +1640,7 @@ async function refreshMarketData(showToast) {
   snapshotToday();
   localStorage.setItem('fomoguard_last_sync_date', todayStr());
   if (showToast) {
-    if (priceResult.skipped) toast(fxOk ? '환율을 갱신했습니다. (Twelve Data 키가 없어 종목 시세·지수는 갱신하지 않았습니다)' : '갱신에 실패했습니다.', fxOk?'info':'error');
+    if (priceResult.skipped) toast(fxOk ? '환율·지수를 갱신했습니다. (Twelve Data 키가 없어 보유 종목 시세는 갱신하지 않았습니다. 설정에서 키를 등록하면 자동 갱신돼요)' : '갱신에 실패했습니다.', fxOk?'info':'error');
     else toast(`갱신 완료 (시세 성공 ${priceResult.ok} · 실패 ${priceResult.fail})`, priceResult.fail?'warn':'success');
   }
   if (renderers[currentTab]) renderers[currentTab]();
@@ -1979,7 +2014,7 @@ renderers.dashboard = function() {
         <div class="grid grid-cols-3 gap-2 mb-3">
           ${state.marketSnapshot.items.map(i => `<div class="row p-2.5 text-center"><p class="text-[10px] text-muted mb-1">${i.label}</p><p class="text-xs font-bold ${i.pct>=0?'text-up':'text-down'}">${fmtPct(i.pct)}</p></div>`).join('')}
         </div>
-      ` : `<p class="text-xs text-muted mb-3">설정에서 Twelve Data API 키를 등록하면 코스피·S&amp;P500·나스닥 등락률을 볼 수 있어요.</p>`}
+      ` : `<p class="text-xs text-muted mb-3">아래 새로고침을 눌러 코스피·S&amp;P500·나스닥 등락률을 불러와보세요. (설정에서 Twelve Data API 키를 등록하면 더 정확한 시세로 볼 수 있어요)</p>`}
       <div id="daily-analysis-text" class="text-sm text-[#c6cbd9] leading-relaxed mb-3">${state.dailyAnalysis && state.dailyAnalysis.date===todayStr() ? escapeHtml(state.dailyAnalysis.text) : '아직 오늘의 분석이 없습니다. 아래 버튼으로 생성해보세요.'}</div>
       <button id="btn-daily-analysis" class="btn-ghost w-full py-2.5 rounded-xl text-xs font-semibold">${state.dailyAnalysis && state.dailyAnalysis.date===todayStr() ? '🔄 다시 생성하기' : '🤖 오늘의 분석 생성하기'}</button>
       <p class="text-[10px] text-muted mt-2">실시간 뉴스가 아닌, 시장 지표와 등록하신 투자 원칙·포트폴리오를 근거로 AI가 작성한 참고용 코멘트입니다.</p>
@@ -2163,10 +2198,19 @@ renderers.factcheck = function() {
     <p class="text-xs text-muted mb-4">지금 하려는 투자를 입력하면, 등록된 나의 원칙에 비추어 AI가 냉철하게 검증합니다</p>
 
     <div class="card p-4 mb-4 space-y-3">
+      <div><label class="text-xs text-muted mb-1 block">종목명 / 티커</label><input id="fc-ticker" type="text" placeholder="예: 테슬라 또는 TSLA"></div>
       <div class="grid grid-cols-2 gap-3">
-        <div><label class="text-xs text-muted mb-1 block">종목명 / 티커</label><input id="fc-ticker" type="text" placeholder="예: 테슬라"></div>
-        <div><label class="text-xs text-muted mb-1 block">투자 예정 금액</label><input id="fc-amount" type="number" placeholder="예: 3000000"></div>
+        <div><label class="text-xs text-muted mb-1 block">시장</label>
+          <select id="fc-exchange">
+            <option value="">자동(해외)</option>
+            <option value="KRX">국내(KRX)</option>
+            <option value="NASDAQ">NASDAQ</option>
+            <option value="NYSE">NYSE</option>
+          </select>
+        </div>
+        <div><label class="text-xs text-muted mb-1 block">매수 예정 수량</label><input id="fc-qty" type="number" placeholder="예: 10 (주)"></div>
       </div>
+      <p id="fc-price-preview" class="text-xs text-muted"></p>
       <div><label class="text-xs text-muted mb-1 block">왜 지금 사려고 하나요?</label>
         <textarea id="fc-reason" placeholder="충동을 그대로 적어주세요. 예: 오늘 급등했는데 더 오를 것 같아서"></textarea>
       </div>
@@ -2183,6 +2227,7 @@ renderers.factcheck = function() {
     </div>
   `;
   document.getElementById('fc-run').onclick = runFactCheck;
+  ['fc-ticker','fc-exchange','fc-qty'].forEach(id => document.getElementById(id).addEventListener('change', updateFcPricePreview));
   const hist = document.getElementById('fc-history');
   const items = [...state.factchecks].reverse().slice(0,10);
   hist.innerHTML = items.length===0 ? '<p class="text-xs text-muted">아직 기록이 없습니다.</p>' : items.map(f => {
@@ -2222,9 +2267,24 @@ function verdictStyle(v) {
   return { color:'text-good', bg:'bg-good/10', border:'border-good/30', emoji:'✅', mascot:'face-F' };
 }
 
+async function updateFcPricePreview() {
+  const preview = document.getElementById('fc-price-preview');
+  if (!preview) return;
+  const ticker = document.getElementById('fc-ticker').value.trim();
+  const exchange = document.getElementById('fc-exchange').value;
+  const qty = +document.getElementById('fc-qty').value;
+  if (!ticker || !qty) { preview.textContent = ''; return; }
+  preview.textContent = '시세 확인 중...';
+  const quote = await fetchLivePrice(ticker, exchange);
+  if (!quote) { preview.textContent = '실시간 시세를 찾지 못했어요. 종목명/시장을 다시 확인해주세요.'; return; }
+  const currency = exchange==='KRX' ? 'KRW' : 'USD';
+  const krwAmount = currency==='USD' ? qty*quote.price*(state.fx.rate||1) : qty*quote.price;
+  preview.innerHTML = `현재가 ${fmtPrice(quote.price, currency)} × ${qty}주 ≈ <span class="text-brand font-semibold">${fmtWon(krwAmount)}</span>${quote.source==='free'?' <span class="text-[10px]">(무료 시세 기준)</span>':''}`;
+}
 async function runFactCheck() {
   const ticker = document.getElementById('fc-ticker').value.trim();
-  const amount = document.getElementById('fc-amount').value.trim();
+  const exchange = document.getElementById('fc-exchange').value;
+  const qty = document.getElementById('fc-qty').value.trim();
   const reason = document.getElementById('fc-reason').value.trim();
   if (!ticker || !reason) { toast('종목명과 이유는 필수입니다.', 'warn'); return; }
   if (!canUseAI()) { toast('무료 AI를 쓰려면 Google 로그인을 해주세요. (또는 설정에서 본인 API 키 등록)', 'error'); switchTab('settings'); return; }
@@ -2234,6 +2294,17 @@ async function runFactCheck() {
     <div class="detective-wrap"><img src="/mascot/pose-detective.png" alt="" class="detective-img w-full h-full object-contain"></div>
     AI가 원칙을 대조하는 중<span class="loading-dots">...</span>
   </div>`;
+
+  const currency = exchange==='KRX' ? 'KRW' : 'USD';
+  let price = null, amount = null, priceSource = null;
+  if (qty) {
+    const quote = await fetchLivePrice(ticker, exchange);
+    if (quote) {
+      price = quote.price;
+      priceSource = quote.source;
+      amount = currency==='USD' ? (+qty)*price*(state.fx.rate||1) : (+qty)*price;
+    }
+  }
 
   const stats = computePortfolioStats();
   const principlesText = state.principles.length
@@ -2247,7 +2318,19 @@ async function runFactCheck() {
   const systemPrompt = `당신은 '투자워워'라는 개인 투자 집사 AI입니다. 사용자의 등록된 투자 원칙과 현재 포트폴리오, 최근 투자 일지를 참고하여, 사용자가 지금 하려는 투자가 그 원칙에 부합하는지 냉철하고 직설적으로 검증합니다. 근거 없는 응원이나 막연한 긍정은 금지합니다. 감정적 동조보다 사실과 논리를 우선하되, 무례하거나 모욕적이지는 않게 말합니다. 반드시 아래 JSON 형식으로만, 다른 텍스트 없이 답하세요:
 {"verdict":"위배 | 주의 | 양호","score":0-100 사이 정수(원칙 부합도),"summary":"핵심 총평 한두 문장","reasons":["근거 또는 우려 사항 1","근거 2","근거 3"],"advice":"지금 취해야 할 구체적 행동 조언 두세 문장"}`;
 
-  const userPrompt = `[나의 투자 원칙]\n${principlesText}\n\n[현재 포트폴리오 요약]\n총 평가금액: ${Math.round(stats.totalValue).toLocaleString()}원, 누적 수익률: ${stats.returnPct.toFixed(1)}%\n${portfolioText}\n\n[최근 투자 일지]\n${recentJournal}\n\n[지금 하려는 투자]\n종목: ${ticker}\n예정 금액: ${amount ? Math.round(+amount).toLocaleString()+'원' : '미입력'}\n이유: ${reason}\n\n위 정보를 바탕으로 이 투자가 나의 원칙에 부합하는지 JSON으로만 답변하세요.`;
+  const investLines = [`종목: ${ticker}`];
+  if (qty) {
+    investLines.push(`매수 예정 수량: ${qty}주`);
+    if (amount != null) {
+      investLines.push(`실시간 현재가: ${fmtPrice(price, currency)}${priceSource==='free'?' (무료 시세 기준)':''}`);
+      investLines.push(`환산 예정 금액: 약 ${Math.round(amount).toLocaleString()}원`);
+    } else {
+      investLines.push('(실시간 시세를 확인하지 못해 금액 환산 없이 수량만으로 판단할 것)');
+    }
+  } else {
+    investLines.push('수량: 미입력');
+  }
+  const userPrompt = `[나의 투자 원칙]\n${principlesText}\n\n[현재 포트폴리오 요약]\n총 평가금액: ${Math.round(stats.totalValue).toLocaleString()}원, 누적 수익률: ${stats.returnPct.toFixed(1)}%\n${portfolioText}\n\n[최근 투자 일지]\n${recentJournal}\n\n[지금 하려는 투자]\n${investLines.join('\n')}\n이유: ${reason}\n\n위 정보를 바탕으로 이 투자가 나의 원칙에 부합하는지 JSON으로만 답변하세요.`;
 
   try {
     const text = await callAI({ system: systemPrompt, user: userPrompt, maxTokens: 2500 });
@@ -2255,7 +2338,7 @@ async function runFactCheck() {
     if (!jsonMatch) throw new Error('AI 응답을 해석할 수 없습니다.');
     const result = JSON.parse(jsonMatch[0]);
 
-    const record = { id: uid(), date: todayStr(), ticker, amount: amount ? +amount : null, reason, result };
+    const record = { id: uid(), date: todayStr(), ticker, exchange, qty: qty?+qty:null, price, amount, priceSource, reason, result };
     state.factchecks.push(record);
     save(LS.factchecks, state.factchecks);
     grantFactCheckXp();
@@ -2279,7 +2362,7 @@ function renderFactCheckResult(result, record) {
   const mq = pickMovieQuote(result.verdict === '양호' ? 'good' : 'warn');
   box.innerHTML = `
     ${record ? `<div class="row p-3 mb-2 text-xs">
-      <p><span class="font-semibold">${escapeHtml(record.ticker)}</span> <span class="text-muted">· ${escapeHtml(record.date)}${record.amount?' · '+fmtWon(record.amount):''}</span></p>
+      <p><span class="font-semibold">${escapeHtml(record.ticker)}</span> <span class="text-muted">· ${escapeHtml(record.date)}${record.qty?' · '+record.qty+'주':''}${record.amount?' · 약 '+fmtWon(record.amount):''}</span></p>
       <p class="text-muted mt-1">"${escapeHtml(record.reason)}"</p>
     </div>` : ''}
     <div class="card p-5 border ${s.border} ${s.bg} fade-in">
