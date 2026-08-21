@@ -36,16 +36,25 @@ const FETCH_HEADERS = {
   'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8'
 };
 
-// 구글 뉴스가 클라우드 쪽 IP에서 오는 요청을 간헐적으로 503으로 막는 경우가 있어,
-// 짧은 간격을 두고 최대 3번까지 재시도한다.
+async function fetchWithTimeout(url, ms) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { headers: FETCH_HEADERS, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+// 구글 뉴스가 클라우드 쪽 IP에서 오는 요청을 간헐적으로 503으로 막는 경우가 있어 1번 재시도하되,
+// 매 시도에 짧은 타임아웃을 걸어서 막혀 있을 때 응답이 오래 지연되지 않게 한다.
 async function fetchWithRetry(url, retries) {
-  if (retries === undefined) retries = 2;
+  if (retries === undefined) retries = 1;
   let lastStatus = 0;
   for (let attempt = 0; attempt <= retries; attempt++) {
-    if (attempt > 0) await sleep(500 * attempt);
+    if (attempt > 0) await sleep(400);
     let res;
     try {
-      res = await fetch(url, { headers: FETCH_HEADERS });
+      res = await fetchWithTimeout(url, 5000);
     } catch (e) {
       continue;
     }
