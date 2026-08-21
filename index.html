@@ -92,11 +92,13 @@ tailwind.config = {
   .drag-handle:active { cursor:grabbing; }
   .drag-bar { width:18px; height:2px; border-radius:1px; background:#5b6272; margin:3px 0; }
   .dash-section { position:relative; -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
-  .dash-editing .dash-section { position:absolute; left:0; right:0; transition: top .18s ease; touch-action:none; }
+  .dash-editing .dash-section { position:absolute; left:0; right:0; transition: top .18s ease; }
   @keyframes dashJiggle { 0%,100% { transform: rotate(-1deg); } 50% { transform: rotate(1deg); } }
   .dash-section.jiggle { animation: dashJiggle .24s ease-in-out infinite; }
   .dash-section.dash-dragging { animation:none !important; transition:none !important; z-index:60; transform: scale(1.03); box-shadow: 0 16px 32px -10px rgba(0,0,0,0.6); }
   .dash-trash-badge { position:absolute; top:-8px; left:-8px; width:26px; height:26px; border-radius:999px; background:#f04452; color:#fff; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:800; box-shadow:0 2px 8px rgba(0,0,0,0.5); z-index:5; line-height:1; }
+  .dash-drag-handle { position:absolute; top:-8px; right:-8px; width:32px; height:32px; border-radius:999px; background:#3182f6; display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,0.5); z-index:5; touch-action:none; cursor:grab; }
+  .dash-drag-handle .drag-bar { background:#fff; width:14px; margin:1.5px 0; }
   .dash-edit-bar { position:sticky; top:0; z-index:40; background:rgba(11,13,20,0.9); backdrop-filter: blur(6px); }
   .dash-archive-chip { background:#1b202c; border:1px dashed #3a4152; }
   #tutorial-dim {
@@ -1617,13 +1619,28 @@ async function generateDailyAnalysis(silent) {
   if (!canUseAI()) { if (!silent) { toast('무료 AI를 쓰려면 Google 로그인을 해주세요. (또는 설정에서 본인 API 키 등록)', 'error'); switchTab('settings'); } return; }
   const box = document.getElementById('daily-analysis-text');
   if (box) box.innerHTML = `<span class="inline-block spin">⏳</span> 분석 생성 중...`;
-  const principlesText = state.principles.length ? state.principles.map(p=>`- [${p.source}] ${p.title}`).join('\n') : '(등록된 원칙 없음)';
-  const portfolioText = state.portfolio.length ? state.portfolio.map(h=>{ const ret = h.avgPrice>0?(h.currentPrice-h.avgPrice)/h.avgPrice*100:0; return `- ${h.name}(${h.type==='core'?'코어':'알파'}): ${fmtPct(ret)}`; }).join('\n') : '(보유 종목 없음)';
+  const principlesText = state.principles.length ? state.principles.map(p=>`- [${p.source}] ${p.title}\n  ${p.body.replace(/\n/g,' ')}`).join('\n') : '(등록된 원칙 없음)';
+  const portfolioText = state.portfolio.length ? state.portfolio.map(h=>{
+    const ret = h.avgPrice>0?(h.currentPrice-h.avgPrice)/h.avgPrice*100:0;
+    const dailyStr = h.dailyChangePct!==undefined ? ` · 전일대비 ${fmtPct(h.dailyChangePct)}` : '';
+    return `- ${h.name}${h.ticker?`(${h.ticker})`:''} [${h.type==='core'?'코어':'알파'}]: 누적수익률 ${fmtPct(ret)}${dailyStr}`;
+  }).join('\n') : '(보유 종목 없음)';
   const marketText = state.marketSnapshot && state.marketSnapshot.items.length ? state.marketSnapshot.items.map(i=>`- ${i.label}: ${fmtPct(i.pct)}`).join('\n') : '(시장 지표 없음)';
   const realized = realizedSummary();
+  const newsLines = [];
+  state.newsKeywords.forEach(k => {
+    const cached = state.newsCache[k];
+    if (isFreshNewsCache(cached)) cached.items.slice(0,3).forEach(it => newsLines.push(`- [${k}] ${it.title}${it.source?` (${it.source})`:''}`));
+  });
+  const newsText = newsLines.length ? newsLines.slice(0,10).join('\n') : '(오늘 수집된 관련 뉴스 없음 - 뉴스 언급하지 말 것)';
 
-  const systemPrompt = `당신은 '투자워워'의 데일리 브리핑 작성자입니다. 확인되지 않은 뉴스나 사건을 절대 지어내지 마세요. 오직 제공된 시장 지표 수치와 사용자의 투자 원칙, 포트폴리오 현황만 근거로 3~4문장의 짧고 담백한 한국어 데일리 코멘트를 작성하세요. 과장하거나 확정적인 예측을 하지 말고, 사용자가 스스로 판단하도록 돕는 담담한 톤을 유지하세요. 다른 설명 없이 코멘트 본문만 출력하세요.`;
-  const userPrompt = `[오늘 날짜] ${todayStr()}\n[시장 지표 등락률]\n${marketText}\n\n[나의 투자 원칙]\n${principlesText}\n\n[내 포트폴리오 현황(종목별 수익률)]\n${portfolioText}\n\n[누적 실현손익] ${Math.round(realized.pnl).toLocaleString()}원\n\n위 정보를 바탕으로 오늘 하루 참고할 짧은 데일리 코멘트를 작성해줘.`;
+  const systemPrompt = `당신은 '투자워워'의 데일리 브리핑 작성자입니다. 아래 제공되는 시장 지표, 사용자의 투자 원칙 전문, 보유 종목 현황, 오늘 수집된 실제 뉴스 헤드라인만 근거로 4~6문장의 한국어 데일리 코멘트를 작성하세요.
+- 보유 종목이 있다면 최소 1개 이상 실제 종목명을 구체적으로 언급하며, 그 종목이 사용자의 원칙 중 어떤 조항과 관련 있는지 짚어주세요.
+- 뉴스 헤드라인이 주어졌다면 포트폴리오와 관련된 것을 골라 근거로 삼되, 헤드라인 제목에 없는 구체적 수치·원인·전망은 절대 지어내지 마세요. 헤드라인이 없다면 뉴스는 언급하지 마세요.
+- 매일 다른 관점과 표현으로 작성해서 문장 구조가 반복되지 않게 하세요.
+- 뻔하고 안전한 일반론보다 사용자의 실제 종목명·원칙 조항에 근거한 구체적인 코멘트를 우선하세요. 다만 확정적인 가격 예측이나 매수/매도 지시는 하지 말고, 판단은 사용자 몫으로 남겨두세요.
+- 다른 설명 없이 코멘트 본문만 출력하세요.`;
+  const userPrompt = `[오늘 날짜] ${todayStr()}\n\n[시장 지표 등락률]\n${marketText}\n\n[나의 투자 원칙 전문]\n${principlesText}\n\n[내 포트폴리오 현황]\n${portfolioText}\n\n[누적 실현손익] ${Math.round(realized.pnl).toLocaleString()}원\n\n[오늘 수집된 관심 키워드 뉴스 헤드라인]\n${newsText}\n\n위 정보를 바탕으로 오늘 하루 참고할 구체적인 데일리 코멘트를 작성해줘.`;
 
   try {
     const text = (await callAI({ system: systemPrompt, user: userPrompt, maxTokens: 2000 })).trim();
@@ -2035,13 +2052,13 @@ renderers.dashboard = function() {
     </div>
     ${dashEditMode ? `
     <div class="dash-edit-bar rounded-2xl px-4 py-3 mb-3 flex items-center justify-between gap-3">
-      <p class="text-xs text-muted">카드를 눌러서 옮기거나, 🗑을 눌러 숨겨보세요</p>
+      <p class="text-xs text-muted">오른쪽 손잡이(☰)를 끌어 옮기거나, 🗑을 눌러 숨겨보세요</p>
       <button id="btn-dash-done" class="btn-brand text-xs font-bold px-4 py-2 rounded-full flex-shrink-0">완료</button>
     </div>` : ''}
     <div id="dash-sections-wrap" class="relative ${dashEditMode?'dash-editing':''}">
       ${visibleOrder.map(id => `
         <div class="dash-section ${dashEditMode?'jiggle':''}" data-section-id="${id}">
-          ${dashEditMode ? `<button data-trash="${id}" class="dash-trash-badge">🗑</button>` : ''}
+          ${dashEditMode ? `<button data-trash="${id}" class="dash-trash-badge">🗑</button><div class="dash-drag-handle" data-dash-handle="${id}"><div class="drag-bar"></div><div class="drag-bar"></div><div class="drag-bar"></div></div>` : ''}
           ${sections[id]}
         </div>
       `).join('')}
@@ -3342,8 +3359,13 @@ function dashRestoreSection(id) {
 
 function attachDashPressHandlers() {
   dashSectionEls().forEach(sec => {
+    if (dashEditMode) {
+      // 편집 모드에서는 오른쪽 손잡이만 드래그를 시작함 - 카드 나머지 부분은 평소처럼 스크롤 가능
+      const handle = sec.querySelector('[data-dash-handle]');
+      if (handle) handle.onpointerdown = (e) => startDashDrag(e, sec);
+      return;
+    }
     sec.onpointerdown = (e) => {
-      if (dashEditMode) { if (e.target.closest('[data-trash]')) return; startDashDrag(e, sec); return; }
       const startXY = { x: e.clientX, y: e.clientY };
       const onMove = (ev) => {
         if (Math.abs(ev.clientX-startXY.x) > 10 || Math.abs(ev.clientY-startXY.y) > 10) cancelPress();
