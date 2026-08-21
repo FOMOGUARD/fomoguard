@@ -91,7 +91,18 @@ tailwind.config = {
   .drag-handle { padding:10px; margin:-10px; cursor:grab; touch-action:none; }
   .drag-handle:active { cursor:grabbing; }
   .drag-bar { width:18px; height:2px; border-radius:1px; background:#5b6272; margin:3px 0; }
-  #tutorial-overlay { background: rgba(2,4,8,0.86); backdrop-filter: blur(3px); }
+  #tutorial-dim { background: rgba(2,4,8,0.82); }
+  #tutorial-spotlight {
+    position: fixed; z-index: 96; border-radius: 18px; pointer-events: none;
+    box-shadow: 0 0 0 9999px rgba(2,4,8,0.82);
+    transition: top .35s cubic-bezier(.4,0,.2,1), left .35s cubic-bezier(.4,0,.2,1), width .35s cubic-bezier(.4,0,.2,1), height .35s cubic-bezier(.4,0,.2,1);
+  }
+  #tutorial-spotlight::after {
+    content:''; position:absolute; inset:-3px; border-radius: inherit; border:2px solid #3182f6;
+    animation: spotlightPulse 1.6s ease-in-out infinite;
+  }
+  @keyframes spotlightPulse { 0%,100% { opacity:.9; } 50% { opacity:.35; } }
+  #tutorial-tooltip { position: fixed; z-index: 97; transition: top .35s cubic-bezier(.4,0,.2,1), left .35s cubic-bezier(.4,0,.2,1); }
   .tut-dot { width:6px; height:6px; border-radius:999px; background:#2a3040; transition: background .2s, width .2s; }
   .tut-dot.active { background:#3182f6; width:16px; }
 </style>
@@ -110,15 +121,22 @@ tailwind.config = {
   </div>
 </div>
 
-<div id="tutorial-overlay" class="fixed inset-0 z-[95] hidden px-6 items-center justify-center">
-  <button id="tutorial-skip" class="absolute top-6 right-5 text-xs text-muted underline underline-offset-2">건너뛰기</button>
-  <div class="w-full max-w-[380px] text-center">
-    <img id="tutorial-img" src="/mascot/pose-wave.png" alt="" class="w-32 mx-auto mb-2" style="filter: drop-shadow(0 16px 28px rgba(49,130,246,0.28))">
-    <h2 id="tutorial-title" class="font-extrabold text-xl mt-2"></h2>
-    <p id="tutorial-body" class="text-sm text-[#c6cbd9] mt-3 mb-8 leading-relaxed"></p>
-    <div id="tutorial-dots" class="flex items-center justify-center gap-1.5 mb-6"></div>
-    <button id="tutorial-next" class="btn-brand w-full max-w-[280px] py-3 rounded-full text-sm font-bold"></button>
+<div id="tutorial-dim" class="fixed inset-0 z-[95] hidden"></div>
+<div id="tutorial-spotlight" class="hidden"></div>
+<div id="tutorial-tooltip" class="hidden card p-4" style="width:300px;max-width:calc(100vw - 48px)">
+  <div class="flex items-center gap-2.5 mb-2">
+    <img id="tutorial-img" src="/mascot/pose-wave.png" alt="" class="w-11 h-11 object-contain flex-shrink-0">
+    <h2 id="tutorial-title" class="font-bold text-sm leading-snug"></h2>
   </div>
+  <p id="tutorial-body" class="text-xs text-[#c6cbd9] leading-relaxed mb-3"></p>
+  <div class="flex items-center justify-between gap-2 mb-3">
+    <div id="tutorial-dots" class="flex items-center gap-1.5"></div>
+    <div class="flex items-center gap-3">
+      <button id="tutorial-skip" class="text-[11px] text-muted underline underline-offset-2 whitespace-nowrap">건너뛰기</button>
+      <button id="tutorial-dismiss" class="text-[11px] text-muted underline underline-offset-2 whitespace-nowrap">다시 보지 않기</button>
+    </div>
+  </div>
+  <button id="tutorial-next" class="btn-brand w-full py-2.5 rounded-xl text-xs font-bold"></button>
 </div>
 
 <div class="app-shell">
@@ -361,6 +379,16 @@ async function pullFromCloud() {
     await pushToCloud();
   }
 }
+let lastCloudPullAt = 0;
+async function pullFromCloudIfStale() {
+  if (!supabaseClient || !currentUser) return;
+  if (cloudSyncTimer) return; // 방금 로컬에서 바꾼 걸 push 대기 중이면, pull로 덮어쓰지 않도록 건너뜀
+  if (Date.now() - lastCloudPullAt < 8000) return;
+  lastCloudPullAt = Date.now();
+  await pullFromCloud();
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pullFromCloudIfStale(); });
+window.addEventListener('focus', pullFromCloudIfStale);
 async function handleSupabaseSession(session, isNewSignIn) {
   currentUser = session.user;
   const meta = session.user.user_metadata || {};
@@ -507,44 +535,97 @@ document.getElementById('welcome-skip').addEventListener('click', () => {
   maybeShowTutorial();
 });
 
-/* ---------------- 첫 진입 튜토리얼 ---------------- */
+/* ---------------- 첫 진입 튜토리얼 (스포트라이트 코치마크 투어) ---------------- */
 const TUTORIAL_STEPS = [
-  { img:'pose-wave', title:'안녕! 나는 투자워워예요 🐜', body:'3분이면 다 둘러봐요. 어려운 말 없이, 딱 필요한 것만 빠르게 알려드릴게요.' },
-  { img:'face-A', title:'📊 대시보드 — 내 자산 한눈에', body:'지금 내 전체 자산이 얼마인지, 오늘 하루는 얼마나 움직였는지 여기서 다 보여요. "전일대비"는 어제보다 오늘 얼마나 올랐는지를 뜻해요.' },
-  { img:'pose-detective', title:'🧊 포모체크 — 사고 싶을 때 누르세요', body:'"가즈아!" 하고 싶을 때 하단 정중앙 버튼을 눌러보세요. AI가 내가 세운 원칙과 비교해서 "이거 진짜 사도 돼?"를 냉정하게 판단해줘요.' },
-  { img:'pose-chart-up', title:'💼 포트폴리오 — 코어 vs 알파', body:'코어는 오래 들고 갈 든든한 종목, 알파는 공격적으로 굴려볼 종목이에요. 종목마다 오늘 얼마나 움직였는지도 바로 보여드려요.' },
-  { img:'pose-point', title:'📓 투자일지 — 미래의 나에게 남기는 메모', body:'오늘 왜 그런 선택을 했는지 적어두세요. 매수·매도, 현금 입출금 기록도 여기 자동으로 쌓여요.' },
-  { img:'face-G', title:'📜 투자원칙 — 나만의 투자 규칙', body:'"-15%면 무조건 재검토" 같은 나만의 규칙을 적어두면, 포모체크가 그 규칙을 기준으로 판단해줘요.' },
-  { img:'face-B', title:'☰ 더보기 — 설정은 다 여기에', body:'탭 순서 바꾸기, 실시간 뉴스, 로그인·API 키 설정까지 전부 여기 모여있어요. 언제든 다시 볼 수 있으니 편하게 눌러보세요!' }
+  { tab:'dashboard', target:null, img:'pose-wave', title:'안녕! 나는 투자워워예요 🐜', body:'3분이면 다 둘러봐요. 실제 화면을 하나씩 짚어가면서, 딱 필요한 것만 빠르게 알려드릴게요.' },
+  { tab:'dashboard', target:'.hero-card', img:'face-A', title:'📊 대시보드 — 내 자산 한눈에', body:'지금 내 전체 자산이 얼마인지, 오늘 하루는 얼마나 움직였는지 여기서 다 보여요. "전일대비"는 어제보다 오늘 얼마나 올랐는지를 뜻해요.' },
+  { tab:'factcheck', target:'#fc-run', img:'pose-detective', title:'🧊 포모체크 — 사고 싶을 때 누르세요', body:'"가즈아!" 하고 싶을 때 이 버튼을 눌러보세요. AI가 내가 세운 원칙과 비교해서 "이거 진짜 사도 돼?"를 냉정하게 판단해줘요.' },
+  { tab:'portfolio', target:'#btn-add-holding', img:'pose-chart-up', title:'💼 포트폴리오 — 코어 vs 알파', body:'여기서 보유 종목을 추가해요. 코어는 오래 들고 갈 든든한 종목, 알파는 공격적으로 굴려볼 종목이에요. 종목마다 오늘 얼마나 움직였는지도 바로 보여드려요.' },
+  { tab:'journal', target:'#btn-add-journal', img:'pose-point', title:'📓 투자일지 — 미래의 나에게 남기는 메모', body:'오늘 왜 그런 선택을 했는지 적어두세요. 매수·매도, 현금 입출금 기록도 여기 자동으로 쌓여요.' },
+  { tab:'principles', target:'#btn-compass', img:'face-G', title:'📜 투자원칙 — 나만의 투자 규칙', body:'"-15%면 무조건 재검토" 같은 나만의 규칙을 적어두면, 포모체크가 그 규칙을 기준으로 판단해줘요. 뭘 적어야 할지 모르겠으면 투자 나침반부터 눌러보세요.' },
+  { tab:null, target:'[data-tab="more"]', img:'face-B', title:'☰ 더보기 — 설정은 다 여기에', body:'탭 순서 바꾸기, 실시간 뉴스, 로그인·API 키 설정까지 전부 여기 모여있어요. 언제든 다시 볼 수 있으니 편하게 눌러보세요!' }
 ];
 let tutorialStep = 0;
+function positionTutorialSpotlight(selector) {
+  const spot = document.getElementById('tutorial-spotlight');
+  const tip = document.getElementById('tutorial-tooltip');
+  const el = selector ? document.querySelector(selector) : null;
+  if (!el) {
+    spot.classList.add('hidden');
+    const tw = tip.getBoundingClientRect().width || 300;
+    const th = tip.getBoundingClientRect().height || 220;
+    tip.style.left = Math.round((window.innerWidth-tw)/2)+'px';
+    tip.style.top = Math.round((window.innerHeight-th)/2)+'px';
+    return;
+  }
+  const rBefore = el.getBoundingClientRect();
+  if (rBefore.top < 70 || rBefore.bottom > window.innerHeight - 90) {
+    el.scrollIntoView({ block: 'center', behavior: 'auto' });
+  }
+  const r = el.getBoundingClientRect();
+  const pad = 8;
+  spot.classList.remove('hidden');
+  spot.style.top = Math.round(r.top-pad)+'px';
+  spot.style.left = Math.round(r.left-pad)+'px';
+  spot.style.width = Math.round(r.width+pad*2)+'px';
+  spot.style.height = Math.round(r.height+pad*2)+'px';
+  const tw = tip.offsetWidth || 300;
+  const th = tip.offsetHeight || 220;
+  const spaceBelow = window.innerHeight - r.bottom;
+  let top;
+  if (spaceBelow > th + 24 || spaceBelow > r.top) top = Math.min(r.bottom + pad + 12, window.innerHeight - th - 16);
+  else top = Math.max(16, r.top - pad - 12 - th);
+  let left = r.left + r.width/2 - tw/2;
+  left = Math.max(16, Math.min(left, window.innerWidth - tw - 16));
+  tip.style.top = Math.round(top)+'px';
+  tip.style.left = Math.round(left)+'px';
+}
 function renderTutorialStep() {
   const s = TUTORIAL_STEPS[tutorialStep];
+  if (s.tab && s.tab !== currentTab) switchTab(s.tab);
   document.getElementById('tutorial-img').src = `/mascot/${s.img}.png`;
   document.getElementById('tutorial-title').textContent = s.title;
   document.getElementById('tutorial-body').textContent = s.body;
   document.getElementById('tutorial-dots').innerHTML = TUTORIAL_STEPS.map((_,i)=>`<span class="tut-dot ${i===tutorialStep?'active':''}"></span>`).join('');
-  document.getElementById('tutorial-next').textContent = tutorialStep===TUTORIAL_STEPS.length-1 ? '시작하기! 🚀' : '다음';
+  document.getElementById('tutorial-next').textContent = tutorialStep===TUTORIAL_STEPS.length-1 ? '모두 이해했어요! 시작하기 🚀' : '다음';
+  requestAnimationFrame(() => requestAnimationFrame(() => positionTutorialSpotlight(s.target)));
 }
 function showTutorial() {
   tutorialStep = 0;
+  document.getElementById('tutorial-dim').classList.remove('hidden');
+  document.getElementById('tutorial-tooltip').classList.remove('hidden');
   renderTutorialStep();
-  const ov = document.getElementById('tutorial-overlay');
-  ov.classList.remove('hidden'); ov.classList.add('flex');
 }
 function hideTutorial() {
-  const ov = document.getElementById('tutorial-overlay');
-  ov.classList.add('hidden'); ov.classList.remove('flex');
-  localStorage.setItem('fomoguard_tutorial_seen', '1');
+  document.getElementById('tutorial-dim').classList.add('hidden');
+  document.getElementById('tutorial-spotlight').classList.add('hidden');
+  document.getElementById('tutorial-tooltip').classList.add('hidden');
+}
+function dismissTutorialForever() {
+  state.settings.tutorialDismissed = true;
+  save(LS.settings, state.settings);
+  hideTutorial();
 }
 function maybeShowTutorial() {
-  if (!localStorage.getItem('fomoguard_tutorial_seen')) showTutorial();
+  if (state.settings.tutorialDismissed) return;
+  if (!state.settings.tutorialFirstSeenAt) {
+    state.settings.tutorialFirstSeenAt = Date.now();
+    save(LS.settings, state.settings);
+  }
+  if (Date.now() - state.settings.tutorialFirstSeenAt > 24*3600*1000) return;
+  showTutorial();
 }
 document.getElementById('tutorial-next').addEventListener('click', () => {
   if (tutorialStep < TUTORIAL_STEPS.length-1) { tutorialStep++; renderTutorialStep(); }
-  else hideTutorial();
+  else dismissTutorialForever();
 });
 document.getElementById('tutorial-skip').addEventListener('click', hideTutorial);
+document.getElementById('tutorial-dismiss').addEventListener('click', dismissTutorialForever);
+window.addEventListener('resize', () => {
+  if (!document.getElementById('tutorial-dim').classList.contains('hidden')) {
+    positionTutorialSpotlight(TUTORIAL_STEPS[tutorialStep].target);
+  }
+});
 
 /* ---------------- nav / tabs / back history ---------------- */
 const TAB_META = {
@@ -1762,12 +1843,26 @@ renderers.factcheck = function() {
   hist.innerHTML = items.length===0 ? '<p class="text-xs text-muted">아직 기록이 없습니다.</p>' : items.map(f => {
     const v = f.result?.verdict || '오류';
     const color = v==='위배' ? 'text-bad' : v==='주의' ? 'text-warn' : v==='양호' ? 'text-good' : 'text-muted';
-    return `<button data-fcid="${escapeHtml(f.id)}" class="row p-3.5 flex items-center justify-between text-sm w-full text-left">
-      <div><span class="font-semibold">${escapeHtml(f.ticker)}</span> <span class="text-xs text-muted">${f.date}</span></div>
-      <span class="font-bold ${color}">${escapeHtml(v)}</span>
-    </button>`;
+    return `<div class="row p-3.5 flex items-center gap-1 text-sm">
+      <button data-fcid="${escapeHtml(f.id)}" class="flex-1 flex items-center justify-between text-left min-w-0">
+        <div class="min-w-0"><span class="font-semibold">${escapeHtml(f.ticker)}</span> <span class="text-xs text-muted">${f.date}</span></div>
+        <span class="font-bold ${color} flex-shrink-0 ml-2">${escapeHtml(v)}</span>
+      </button>
+      <button data-fcdel="${escapeHtml(f.id)}" class="text-muted text-base leading-none flex-shrink-0 px-2 py-1" aria-label="기록 삭제">✕</button>
+    </div>`;
   }).join('');
   hist.querySelectorAll('[data-fcid]').forEach(b => b.onclick = () => showFactCheckHistoryItem(b.dataset.fcid));
+  hist.querySelectorAll('[data-fcdel]').forEach(b => b.onclick = () => {
+    const id = b.dataset.fcdel;
+    confirmModal('기록 삭제', '이 포모체크 기록을 삭제할까요? 되돌릴 수 없습니다.', () => {
+      state.factchecks = state.factchecks.filter(f => f.id !== id);
+      save(LS.factchecks, state.factchecks);
+      const box = document.getElementById('fc-result');
+      if (box) box.innerHTML = '';
+      renderers.factcheck();
+      toast('기록을 삭제했습니다.', 'success');
+    });
+  });
 };
 function showFactCheckHistoryItem(id) {
   const record = state.factchecks.find(f => f.id === id);
