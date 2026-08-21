@@ -88,6 +88,8 @@ tailwind.config = {
   @keyframes loadingDotsWidth { to { width: 1.3em; } }
   .taborder-row { position:absolute; left:0; right:0; touch-action:none; transition: top .18s ease, box-shadow .18s ease; }
   .taborder-row.dragging { transition:none; z-index:50; box-shadow: 0 12px 28px -8px rgba(0,0,0,0.55); }
+  .dashorder-row { position:absolute; left:0; right:0; touch-action:none; transition: top .18s ease, box-shadow .18s ease; }
+  .dashorder-row.dragging { transition:none; z-index:50; box-shadow: 0 12px 28px -8px rgba(0,0,0,0.55); }
   .drag-handle { padding:10px; margin:-10px; cursor:grab; touch-action:none; }
   .drag-handle:active { cursor:grabbing; }
   .drag-bar { width:18px; height:2px; border-radius:1px; background:#5b6272; margin:3px 0; }
@@ -158,7 +160,7 @@ tailwind.config = {
           <p class="text-[11px] text-muted leading-none mt-1.5">쉽고 편하게, 나만의 투자 집사</p>
         </div>
       </button>
-      <button id="btn-level-badge" class="hidden badge bg-brand/15 text-brand font-bold flex-shrink-0 whitespace-nowrap"></button>
+      <button id="btn-level-badge" class="hidden badge bg-brand/15 text-brand font-bold flex-shrink-0 whitespace-nowrap inline-flex items-center gap-1"></button>
     </div>
   </header>
 
@@ -171,6 +173,7 @@ tailwind.config = {
     <section id="panel-settings" class="tab-panel hidden"></section>
     <section id="panel-more" class="tab-panel hidden"></section>
     <section id="panel-taborder" class="tab-panel hidden"></section>
+    <section id="panel-dashlayout" class="tab-panel hidden"></section>
     <section id="panel-news" class="tab-panel hidden"></section>
     <section id="panel-growth" class="tab-panel hidden"></section>
   </main>
@@ -207,7 +210,17 @@ function save(key, val) { localStorage.setItem(key, JSON.stringify(val)); if (ty
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(16).slice(2));
 
 const CENTER_TAB = 'factcheck';
-const REORDERABLE = ['dashboard','portfolio','journal','principles','settings','news','growth'];
+const REORDERABLE = ['dashboard','portfolio','journal','principles','news','growth','settings'];
+const DASH_SECTIONS = [
+  { id:'quote', label:'오늘의 투자 격언', icon:'💬' },
+  { id:'stats', label:'핵심 지표 요약', icon:'📊' },
+  { id:'market', label:'오늘의 시장 &amp; AI 분석', icon:'📰' },
+  { id:'treemap', label:'자산 트리맵', icon:'🗺️' },
+  { id:'donuts', label:'비중 도넛 차트', icon:'🍩' },
+  { id:'contribution', label:'종목별 수익 기여도', icon:'💹' },
+  { id:'trend', label:'자산가치 추이', icon:'📈' },
+  { id:'shortcuts', label:'포모체크 · 투자일지 바로가기', icon:'🔗' },
+];
 
 /* ================= AI PROVIDERS (멀티 AI 연동 + 키 자동인식) ================= */
 const AI_PROVIDERS = {
@@ -267,12 +280,17 @@ let state = {
   cashFlows: load(LS.cashFlows, []),
   profile: load(LS.profile, null),
   growth: load(LS.growth, { xp:0, lastLoginXpDate:null, fcXpDate:null, fcXpCount:0, journalXpDate:null, journalXpCount:0, quizAnsweredDate:null, quizCorrect:null, quizPickedIdx:null }),
-  settings: load(LS.settings, { provider:'claude', apiKeys:{claude:'',gemini:'',openai:'',grok:''}, models:{claude:'claude-sonnet-5',gemini:'gemini-3.6-flash',openai:'gpt-4.1',grok:'grok-4'}, twelveDataKey:'', newsApiKey:'', tabOrder: REORDERABLE.slice() })
+  settings: load(LS.settings, { provider:'claude', apiKeys:{claude:'',gemini:'',openai:'',grok:''}, models:{claude:'claude-sonnet-5',gemini:'gemini-3.6-flash',openai:'gpt-4.1',grok:'grok-4'}, twelveDataKey:'', newsApiKey:'', tabOrder: REORDERABLE.slice(), dashboardOrder: DASH_SECTIONS.map(s=>s.id), dashboardHidden: [] })
 };
 function sanitizeSettings() {
   let order = (state.settings.tabOrder || []).filter(t => REORDERABLE.includes(t));
   REORDERABLE.forEach(t => { if (!order.includes(t)) order.push(t); });
   state.settings.tabOrder = order;
+  const dashIds = DASH_SECTIONS.map(s=>s.id);
+  let dashOrder = (state.settings.dashboardOrder || []).filter(id => dashIds.includes(id));
+  dashIds.forEach(id => { if (!dashOrder.includes(id)) dashOrder.push(id); });
+  state.settings.dashboardOrder = dashOrder;
+  state.settings.dashboardHidden = (state.settings.dashboardHidden || []).filter(id => dashIds.includes(id));
   if (!state.settings.apiKeys) state.settings.apiKeys = { claude: state.settings.apiKey || '', gemini:'', openai:'', grok:'' };
   if (!state.settings.models) state.settings.models = { claude: state.settings.model || 'claude-sonnet-5', gemini:'gemini-3.6-flash', openai:'gpt-4.1', grok:'grok-4' };
   if (!state.settings.provider) state.settings.provider = 'claude';
@@ -463,7 +481,7 @@ function renderHeaderProfile() {
   if (state.profile) {
     wrap.innerHTML = `${state.profile.picture ? `<img src="${escapeHtml(state.profile.picture)}" class="w-8 h-8 rounded-full flex-shrink-0">` : `<img src="/mascot/face-B.png" alt="" class="w-8 h-8 object-contain flex-shrink-0">`}<div class="min-w-0"><h1 class="font-extrabold text-lg leading-none tracking-tight truncate">${escapeHtml(state.profile.name)}님</h1><p class="text-[11px] text-brand leading-none mt-1.5 font-semibold">오늘도 원칙대로 🧊</p></div>`;
     const gs = computeGrowthStatus();
-    badge.textContent = `Lv.${gs.level} ${gs.title}`;
+    badge.innerHTML = `<img src="/mascot/${rankMascotPath(gs.level, gs.track)}" alt="" class="w-4 h-4 object-contain flex-shrink-0">Lv.${gs.level} ${escapeHtml(gs.title)}`;
     badge.classList.remove('hidden');
   } else {
     wrap.innerHTML = `<img src="/mascot/face-B.png" alt="" class="w-8 h-8 object-contain flex-shrink-0"><div><h1 class="font-extrabold text-lg leading-none tracking-tight">투자워워</h1><p class="text-[11px] text-muted leading-none mt-1.5">쉽고 편하게, 나만의 투자 집사</p></div>`;
@@ -1321,6 +1339,21 @@ function computeTitle(level, track) {
   const tier = RANK_TIERS.find(t => level >= t.minLevel && level <= t.maxLevel) || RANK_TIERS[RANK_TIERS.length-1];
   return tier[track] || tier.none;
 }
+// 티어1(주린이)/티어2(일개미)는 트랙과 무관하게 같은 호칭이라 캐릭터 3종 중 매번 랜덤으로 하나를 보여줌
+const RANK_MASCOTS = [
+  { any: ['rank/t1-a.png', 'rank/t1-b.png', 'rank/t1-c.png'] },
+  { any: ['rank/t2-a.png', 'rank/t2-b.png', 'rank/t2-c.png'] },
+  { domestic: 'rank/t3-domestic.png', overseas: 'rank/t3-overseas.png', balanced: 'rank/t3-balanced.png' },
+  { domestic: 'rank/t4-domestic.png', overseas: 'rank/t4-overseas.png', balanced: 'rank/t4-balanced.png' },
+  { domestic: 'rank/t5-domestic.png', overseas: 'rank/t5-overseas.png', balanced: 'rank/t5-balanced.png' },
+  { domestic: 'rank/t6-domestic.png', overseas: 'rank/t6-overseas.png', balanced: 'rank/t6-balanced.png' },
+];
+function rankMascotPath(level, track) {
+  const idx = RANK_TIERS.findIndex(t => level >= t.minLevel && level <= t.maxLevel);
+  const entry = RANK_MASCOTS[idx < 0 ? RANK_MASCOTS.length-1 : idx];
+  if (entry.any) return entry.any[Math.floor(Math.random()*entry.any.length)];
+  return entry[track] || entry.domestic;
+}
 function computeGrowthStatus() {
   const { level, xpIntoLevel, xpForNext } = computeLevelFromXp(state.growth.xp);
   const track = computeTrack();
@@ -1891,25 +1924,16 @@ renderers.dashboard = function() {
   const satColor = satReturnPct>0?'text-up':satReturnPct<0?'text-down':'text-muted';
   const daily = hasData ? computeDailyChange() : null;
 
-  el.innerHTML = `
-    <div class="hero-card rounded-[26px] p-5 mt-2 mb-3">
-      <p class="text-xs text-muted mb-1.5">총 평가 자산 (원화 기준)</p>
-      <p class="text-[32px] font-extrabold leading-tight tracking-tight">${fmtWon(totalAssets)}</p>
-      ${hasData ? `<div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
-        <span class="badge ${totalPnlPct>0?'bg-up/15 text-up':totalPnlPct<0?'bg-down/15 text-down':'bg-line text-muted'}">누적 ${arrow} ${fmtPct(totalPnlPct)}</span>
-        <span class="text-xs ${pnlColor} font-semibold">${totalPnl>=0?'+':''}${fmtWon(totalPnl)}</span>
-        ${daily ? `<span class="badge ${daily.changePct>0?'bg-up/15 text-up':daily.changePct<0?'bg-down/15 text-down':'bg-line text-muted'}">전일대비 ${daily.changePct>0?'▲':daily.changePct<0?'▼':''} ${fmtPct(daily.changePct)}</span>` : ''}
-      </div>` : `<p class="text-xs text-muted mt-1.5">포트폴리오 탭에서 보유 종목을 추가해보세요</p>`}
-    </div>
-
+  const sections = {
+    quote: `
     <div class="row p-3 mb-3 flex gap-2.5 items-start">
       <img src="/mascot/face-F.png" alt="" class="w-9 h-9 object-contain flex-shrink-0 mt-0.5">
       <div class="flex-1 min-w-0">
         <p class="text-[10px] text-muted mb-1">💬 오늘의 투자 격언</p>
         <p class="text-xs leading-relaxed">"${escapeHtml(q.text)}" <span class="text-muted">— ${escapeHtml(q.who)}</span></p>
       </div>
-    </div>
-
+    </div>`,
+    stats: `
     <div class="grid grid-cols-2 gap-2 mb-3">
       <button id="cell-fx" class="row p-3 text-left">
         <p class="text-[10px] text-muted mb-1">실시간 환율(USD/KRW)</p>
@@ -1925,8 +1949,8 @@ renderers.dashboard = function() {
       <div class="row p-3"><p class="text-[10px] text-muted mb-1">코어 포트폴리오 수익률</p><p class="text-sm font-bold ${coreColor}">${coreCost>0?fmtPct(coreReturnPct):'-'}</p></div>
       <div class="row p-3"><p class="text-[10px] text-muted mb-1">알파 포트폴리오 수익률</p><p class="text-sm font-bold ${satColor}">${satCost>0?fmtPct(satReturnPct):'-'}</p></div>
     </div>
-    <button id="btn-refresh-market" class="text-[11px] text-brand font-semibold mb-4 flex items-center gap-1">🔄 환율·시세·지수·뉴스 새로고침</button>
-
+    <button id="btn-refresh-market" class="text-[11px] text-brand font-semibold mb-4 flex items-center gap-1">🔄 환율·시세·지수·뉴스 새로고침</button>`,
+    market: `
     <div class="card p-4 mb-3">
       <p class="text-sm font-semibold mb-3">📰 오늘의 시장 &amp; AI 데일리 분석</p>
       ${state.marketSnapshot && state.marketSnapshot.date===todayStr() ? `
@@ -1937,14 +1961,13 @@ renderers.dashboard = function() {
       <div id="daily-analysis-text" class="text-sm text-[#c6cbd9] leading-relaxed mb-3">${state.dailyAnalysis && state.dailyAnalysis.date===todayStr() ? escapeHtml(state.dailyAnalysis.text) : '아직 오늘의 분석이 없습니다. 아래 버튼으로 생성해보세요.'}</div>
       <button id="btn-daily-analysis" class="btn-ghost w-full py-2.5 rounded-xl text-xs font-semibold">${state.dailyAnalysis && state.dailyAnalysis.date===todayStr() ? '🔄 다시 생성하기' : '🤖 오늘의 분석 생성하기'}</button>
       <p class="text-[10px] text-muted mt-2">실시간 뉴스가 아닌, 시장 지표와 등록하신 투자 원칙·포트폴리오를 근거로 AI가 작성한 참고용 코멘트입니다.</p>
-    </div>
-
-    ${hasData ? `
+    </div>`,
+    treemap: hasData ? `
     <div class="card p-4 mb-3">
       <p class="text-sm font-semibold mb-3">🗺️ 자산 트리맵 <span class="text-[11px] text-muted font-normal">· 코어/알파 · 크기=비중, 색=수익률</span></p>
       <div id="treemap-wrap"></div>
-    </div>
-
+    </div>` : '',
+    donuts: hasData ? `
     <div class="grid grid-cols-2 gap-3 mb-3">
       <div class="card p-3">
         <p class="text-xs font-semibold mb-2">종목별 비중</p>
@@ -1956,21 +1979,18 @@ renderers.dashboard = function() {
         <canvas id="chart-core" height="140"></canvas>
         <div id="legend-core" class="mt-2 space-y-1"></div>
       </div>
-    </div>
-    ` : ''}
-
+    </div>` : '',
+    contribution: `
     <div class="card p-4 mb-3">
       <p class="text-sm font-semibold mb-3">💹 종목별 수익 기여도 <span class="text-[11px] text-muted font-normal">· 보유중 평가손익 + 실현손익</span></p>
       <div id="contribution-wrap"></div>
-    </div>
-
-    ${hasData ? `
+    </div>`,
+    trend: hasData ? `
     <div class="card p-4 mb-3">
       <p class="text-sm font-semibold mb-3">자산가치 추이</p>
       ${state.snapshots.length > 1 ? '<canvas id="chart-trend" height="160"></canvas>' : '<p class="text-xs text-muted py-6 text-center">이틀 이상 기록되면 추이가 표시됩니다</p>'}
-    </div>
-    ` : ''}
-
+    </div>` : '',
+    shortcuts: `
     <button data-goto="factcheck" class="card p-3.5 mb-3 w-full text-left flex items-center justify-between">
       <div class="flex items-center gap-3">
         ${iconBadge('🧊', TAB_META.factcheck.color)}
@@ -1990,34 +2010,55 @@ renderers.dashboard = function() {
         </div>
       </div>
       <span class="text-muted">›</span>
-    </button>
+    </button>`
+  };
+  const visibleOrder = (state.settings.dashboardOrder || DASH_SECTIONS.map(s=>s.id))
+    .filter(id => !(state.settings.dashboardHidden||[]).includes(id))
+    .filter(id => sections[id]);
+
+  el.innerHTML = `
+    <div class="hero-card rounded-[26px] p-5 mt-2 mb-3">
+      <p class="text-xs text-muted mb-1.5">총 평가 자산 (원화 기준)</p>
+      <p class="text-[32px] font-extrabold leading-tight tracking-tight">${fmtWon(totalAssets)}</p>
+      ${hasData ? `<div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
+        <span class="badge ${totalPnlPct>0?'bg-up/15 text-up':totalPnlPct<0?'bg-down/15 text-down':'bg-line text-muted'}">누적 ${arrow} ${fmtPct(totalPnlPct)}</span>
+        <span class="text-xs ${pnlColor} font-semibold">${totalPnl>=0?'+':''}${fmtWon(totalPnl)}</span>
+        ${daily ? `<span class="badge ${daily.changePct>0?'bg-up/15 text-up':daily.changePct<0?'bg-down/15 text-down':'bg-line text-muted'}">전일대비 ${daily.changePct>0?'▲':daily.changePct<0?'▼':''} ${fmtPct(daily.changePct)}</span>` : ''}
+      </div>` : `<p class="text-xs text-muted mt-1.5">포트폴리오 탭에서 보유 종목을 추가해보세요</p>`}
+    </div>
+    ${visibleOrder.map(id => sections[id]).join('')}
+    <button id="btn-dash-edit" class="text-[11px] text-muted underline underline-offset-2 mb-3 flex items-center gap-1">🗂️ 대시보드 카드 편집</button>
   `;
   el.querySelectorAll('[data-goto]').forEach(b => b.onclick = () => switchTab(b.dataset.goto));
-  document.getElementById('cell-fx').onclick = () => refreshMarketData(true);
-  document.getElementById('cell-cash').onclick = () => openCashFlowModal();
-  document.getElementById('btn-refresh-market').onclick = () => refreshMarketData(true);
-  document.getElementById('btn-daily-analysis').onclick = () => generateDailyAnalysis(false);
+  document.getElementById('btn-dash-edit').onclick = () => switchTab('dashlayout');
+  if (document.getElementById('cell-fx')) document.getElementById('cell-fx').onclick = () => refreshMarketData(true);
+  if (document.getElementById('cell-cash')) document.getElementById('cell-cash').onclick = () => openCashFlowModal();
+  if (document.getElementById('btn-refresh-market')) document.getElementById('btn-refresh-market').onclick = () => refreshMarketData(true);
+  if (document.getElementById('btn-daily-analysis')) document.getElementById('btn-daily-analysis').onclick = () => generateDailyAnalysis(false);
 
   const contribRows = [
     ...state.portfolio.map(h => { const {value,cost} = holdingKRW(h); return { name:h.name, profit: (value-cost)+holdingRealizedPnL(h.id) }; }),
     ...closedPositionsSummary().map(c => ({ name: c.name+' (청산)', profit: c.profit }))
   ].sort((a,b)=>b.profit-a.profit);
-  if (contribRows.length === 0) {
-    document.getElementById('contribution-wrap').innerHTML = '<p class="text-xs text-muted py-4 text-center">보유·거래 내역이 쌓이면 표시됩니다</p>';
-  } else {
-    const maxAbs = Math.max(1, ...contribRows.map(r=>Math.abs(r.profit)));
-    document.getElementById('contribution-wrap').innerHTML = contribRows.map(r => {
-      const pct = Math.abs(r.profit)/maxAbs*50;
-      const isPos = r.profit>=0;
-      return `<div class="flex items-center gap-2 mb-2.5">
-        <span class="text-[11px] w-20 truncate flex-shrink-0">${escapeHtml(r.name)}</span>
-        <div class="flex-1 h-5 relative bg-line/40 rounded overflow-hidden">
-          <div class="absolute left-1/2 top-0 bottom-0 w-px bg-line"></div>
-          ${isPos ? `<div class="absolute top-0 bottom-0 rounded" style="left:50%;width:${pct}%;background:#f04452"></div>` : `<div class="absolute top-0 bottom-0 rounded" style="right:50%;width:${pct}%;background:#3182f6"></div>`}
-        </div>
-        <span class="text-[11px] w-24 text-right flex-shrink-0 font-semibold ${isPos?'text-up':'text-down'}">${isPos?'+':''}${fmtWon(r.profit)}</span>
-      </div>`;
-    }).join('');
+  const contribWrap = document.getElementById('contribution-wrap');
+  if (contribWrap) {
+    if (contribRows.length === 0) {
+      contribWrap.innerHTML = '<p class="text-xs text-muted py-4 text-center">보유·거래 내역이 쌓이면 표시됩니다</p>';
+    } else {
+      const maxAbs = Math.max(1, ...contribRows.map(r=>Math.abs(r.profit)));
+      contribWrap.innerHTML = contribRows.map(r => {
+        const pct = Math.abs(r.profit)/maxAbs*50;
+        const isPos = r.profit>=0;
+        return `<div class="flex items-center gap-2 mb-2.5">
+          <span class="text-[11px] w-20 truncate flex-shrink-0">${escapeHtml(r.name)}</span>
+          <div class="flex-1 h-5 relative bg-line/40 rounded overflow-hidden">
+            <div class="absolute left-1/2 top-0 bottom-0 w-px bg-line"></div>
+            ${isPos ? `<div class="absolute top-0 bottom-0 rounded" style="left:50%;width:${pct}%;background:#f04452"></div>` : `<div class="absolute top-0 bottom-0 rounded" style="right:50%;width:${pct}%;background:#3182f6"></div>`}
+          </div>
+          <span class="text-[11px] w-24 text-right flex-shrink-0 font-semibold ${isPos?'text-up':'text-down'}">${isPos?'+':''}${fmtWon(r.profit)}</span>
+        </div>`;
+      }).join('');
+    }
   }
 
   if (!hasData) return;
@@ -2029,27 +2070,31 @@ renderers.dashboard = function() {
   if (chartCore) chartCore.destroy();
   if (chartTrend) chartTrend.destroy();
 
-  chartDonut = new Chart(document.getElementById('chart-donut'), {
-    type: 'doughnut',
-    data: { labels: state.portfolio.map(h=>h.name), datasets: [{ data: state.portfolio.map(h=>holdingKRW(h).value), backgroundColor: palette, borderColor:'#141822', borderWidth:2 }] },
-    options: { plugins: { legend: { display:false } } }
-  });
-  const legendItems = state.portfolio.map((h,i)=>({ name:h.name, val:holdingKRW(h).value, color:palette[i%palette.length] }));
-  const totalV = legendItems.reduce((s,i)=>s+i.val,0) || 1;
-  const shown = legendItems.slice(0,5);
-  document.getElementById('legend-donut').innerHTML = shown.map(it => `<div class="flex items-center gap-1.5 text-[10px]"><span class="w-2 h-2 rounded-full flex-shrink-0" style="background:${it.color}"></span><span class="truncate flex-1">${escapeHtml(it.name)}</span><span class="text-muted">${Math.round(it.val/totalV*100)}%</span></div>`).join('') + (legendItems.length>5 ? `<p class="text-[10px] text-muted">+${legendItems.length-5}개 더</p>` : '');
+  if (document.getElementById('chart-donut')) {
+    chartDonut = new Chart(document.getElementById('chart-donut'), {
+      type: 'doughnut',
+      data: { labels: state.portfolio.map(h=>h.name), datasets: [{ data: state.portfolio.map(h=>holdingKRW(h).value), backgroundColor: palette, borderColor:'#141822', borderWidth:2 }] },
+      options: { plugins: { legend: { display:false }, tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${fmtWon(ctx.parsed)}` } } } }
+    });
+    const legendItems = state.portfolio.map((h,i)=>({ name:h.name, val:holdingKRW(h).value, color:palette[i%palette.length] }));
+    const totalV = legendItems.reduce((s,i)=>s+i.val,0) || 1;
+    const shown = legendItems.slice(0,5);
+    document.getElementById('legend-donut').innerHTML = shown.map(it => `<div class="flex items-center gap-1.5 text-[10px]"><span class="w-2 h-2 rounded-full flex-shrink-0" style="background:${it.color}"></span><span class="truncate flex-1">${escapeHtml(it.name)}</span><span class="text-muted">${Math.round(it.val/totalV*100)}%</span></div>`).join('') + (legendItems.length>5 ? `<p class="text-[10px] text-muted">+${legendItems.length-5}개 더</p>` : '');
+  }
 
-  chartCore = new Chart(document.getElementById('chart-core'), {
-    type: 'doughnut',
-    data: { labels:['코어','알파'], datasets:[{ data:[coreValue, satValue], backgroundColor:['#3182f6','#00c896'], borderColor:'#141822', borderWidth:2 }] },
-    options: { plugins: { legend: { display:false } } }
-  });
-  document.getElementById('legend-core').innerHTML = `
-    <div class="flex items-center gap-1.5 text-[10px]"><span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#3182f6"></span><span class="flex-1">코어</span><span class="text-muted">${totalValue>0?Math.round(coreValue/totalValue*100):0}%</span></div>
-    <div class="flex items-center gap-1.5 text-[10px]"><span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#00c896"></span><span class="flex-1">알파</span><span class="text-muted">${totalValue>0?Math.round(satValue/totalValue*100):0}%</span></div>
-  `;
+  if (document.getElementById('chart-core')) {
+    chartCore = new Chart(document.getElementById('chart-core'), {
+      type: 'doughnut',
+      data: { labels:['코어','알파'], datasets:[{ data:[coreValue, satValue], backgroundColor:['#3182f6','#00c896'], borderColor:'#141822', borderWidth:2 }] },
+      options: { plugins: { legend: { display:false }, tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${fmtWon(ctx.parsed)}` } } } }
+    });
+    document.getElementById('legend-core').innerHTML = `
+      <div class="flex items-center gap-1.5 text-[10px]"><span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#3182f6"></span><span class="flex-1">코어</span><span class="text-muted">${totalValue>0?Math.round(coreValue/totalValue*100):0}%</span></div>
+      <div class="flex items-center gap-1.5 text-[10px]"><span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#00c896"></span><span class="flex-1">알파</span><span class="text-muted">${totalValue>0?Math.round(satValue/totalValue*100):0}%</span></div>
+    `;
+  }
 
-  if (state.snapshots.length > 1) {
+  if (state.snapshots.length > 1 && document.getElementById('chart-trend')) {
     const recent = state.snapshots.slice(-30);
     chartTrend = new Chart(document.getElementById('chart-trend'), {
       type: 'line',
@@ -3046,10 +3091,15 @@ renderers.more = function() {
       <div class="flex items-center gap-3">${iconBadge('🔀', '#64748b')}<span class="text-sm font-semibold">탭 순서 편집</span></div>
       <span class="text-muted">›</span>
     </button>
+    <button id="more-dashlayout" class="card p-3.5 w-full text-left flex items-center justify-between mb-2.5">
+      <div class="flex items-center gap-3">${iconBadge('🗂️', '#64748b')}<span class="text-sm font-semibold">대시보드 카드 편집</span></div>
+      <span class="text-muted">›</span>
+    </button>
     <p class="text-center text-[11px] text-muted mt-6">투자워워 · 나만의 투자 집사</p>
   `;
   el.querySelectorAll('[data-goto]').forEach(b => b.onclick = () => switchTab(b.dataset.goto));
   document.getElementById('more-taborder').onclick = () => switchTab('taborder');
+  document.getElementById('more-dashlayout').onclick = () => switchTab('dashlayout');
   if (!state.profile) renderGoogleButton('more-google-wrap');
 };
 
@@ -3067,7 +3117,7 @@ renderers.growth = function() {
 
     <div class="hero-card rounded-[26px] p-5 mb-4">
       <div class="flex items-center gap-3 mb-3">
-        <img src="/mascot/face-F.png" alt="" class="w-14 h-14 object-contain flex-shrink-0">
+        <img src="/mascot/${rankMascotPath(gs.level, gs.track)}" alt="" class="w-14 h-14 object-contain flex-shrink-0">
         <div class="flex-1 min-w-0">
           <p class="text-xl font-extrabold">Lv.${gs.level} <span class="text-brand">${escapeHtml(gs.title)}</span></p>
           <p class="text-[11px] text-muted mt-0.5">누적 경험치 ${gs.totalXp.toLocaleString()} EXP</p>
@@ -3199,6 +3249,100 @@ renderers.taborder = function() {
     if (drag.currentIndex !== drag.startIndex) {
       state.settings.tabOrder = order; save(LS.settings, state.settings);
       renderBottomNav();
+    }
+    drag = null;
+  }
+  renderList();
+};
+
+/* ================= 대시보드 카드 편집 ================= */
+const DASHORDER_ROW_H = 64, DASHORDER_GAP = 8;
+renderers.dashlayout = function() {
+  const el = document.getElementById('panel-dashlayout');
+  const order = state.settings.dashboardOrder;
+  const hidden = state.settings.dashboardHidden;
+  el.innerHTML = `
+    <h2 class="font-bold text-xl mt-2 mb-1">🗂️ 대시보드 카드 편집</h2>
+    <p class="text-xs text-muted mb-4">오른쪽 손잡이(☰)를 눌러 끌면 대시보드에 표시되는 순서를 바꿀 수 있어요. 눈 아이콘을 누르면 카드를 숨기거나 다시 보이게 할 수 있어요.</p>
+    <div id="dash-order-list" class="relative" style="height:${order.length*(DASHORDER_ROW_H+DASHORDER_GAP)-DASHORDER_GAP}px"></div>
+  `;
+  function meta(id) { return DASH_SECTIONS.find(s=>s.id===id); }
+  function rowHtml(id, i) {
+    const m = meta(id);
+    const isHidden = hidden.includes(id);
+    return `
+      <div class="row dashorder-row p-3.5 flex items-center justify-between ${isHidden?'opacity-50':''}" data-dash-item="${id}" style="top:${i*(DASHORDER_ROW_H+DASHORDER_GAP)}px;height:${DASHORDER_ROW_H}px">
+        <div class="flex items-center gap-3 min-w-0">
+          ${iconBadge(m.icon, '#64748b', 34)}
+          <span class="text-sm font-semibold truncate">${m.label}</span>
+          ${isHidden ? '<span class="badge bg-line text-muted flex-shrink-0">숨김</span>' : ''}
+        </div>
+        <div class="flex items-center gap-1 flex-shrink-0">
+          <button data-toggle-hide="${id}" class="w-8 h-8 rounded-full flex items-center justify-center text-base">${isHidden?'🙈':'👁️'}</button>
+          <div class="drag-handle flex flex-col items-center justify-center" data-dash-handle="${id}">
+            <div class="drag-bar"></div><div class="drag-bar"></div><div class="drag-bar"></div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  function renderList() {
+    document.getElementById('dash-order-list').innerHTML = order.map((id,i) => rowHtml(id,i)).join('');
+    attachHandlers();
+  }
+  function attachHandlers() {
+    document.querySelectorAll('[data-dash-handle]').forEach(handle => {
+      handle.onpointerdown = (e) => startDrag(e, handle.closest('.dashorder-row'));
+    });
+    document.querySelectorAll('[data-toggle-hide]').forEach(btn => {
+      btn.onclick = () => {
+        const id = btn.dataset.toggleHide;
+        const idx = hidden.indexOf(id);
+        if (idx >= 0) hidden.splice(idx, 1); else hidden.push(id);
+        state.settings.dashboardHidden = hidden;
+        save(LS.settings, state.settings);
+        renderList();
+      };
+    });
+  }
+  let drag = null;
+  function startDrag(e, row) {
+    e.preventDefault();
+    const id = row.dataset.dashItem;
+    const startIndex = order.indexOf(id);
+    drag = { row, id, startIndex, currentIndex: startIndex, startY: e.clientY, startTop: startIndex*(DASHORDER_ROW_H+DASHORDER_GAP), pointerId: e.pointerId };
+    row.setPointerCapture(e.pointerId);
+    row.classList.add('dragging');
+    document.addEventListener('pointermove', onDragMove);
+    document.addEventListener('pointerup', onDragEnd);
+  }
+  function onDragMove(e) {
+    if (!drag) return;
+    const delta = e.clientY - drag.startY;
+    const maxTop = (order.length-1)*(DASHORDER_ROW_H+DASHORDER_GAP);
+    const newTop = Math.min(Math.max(drag.startTop + delta, 0), maxTop);
+    drag.row.style.top = newTop + 'px';
+    const targetIndex = Math.round(newTop/(DASHORDER_ROW_H+DASHORDER_GAP));
+    if (targetIndex !== drag.currentIndex) {
+      order.splice(drag.currentIndex, 1);
+      order.splice(targetIndex, 0, drag.id);
+      drag.currentIndex = targetIndex;
+      order.forEach((id,i) => {
+        if (id === drag.id) return;
+        const r = document.querySelector(`[data-dash-item="${id}"]`);
+        if (r) r.style.top = i*(DASHORDER_ROW_H+DASHORDER_GAP) + 'px';
+      });
+    }
+  }
+  function onDragEnd(e) {
+    if (!drag) return;
+    drag.row.style.top = drag.currentIndex*(DASHORDER_ROW_H+DASHORDER_GAP) + 'px';
+    drag.row.classList.remove('dragging');
+    try { drag.row.releasePointerCapture(drag.pointerId); } catch(err) {}
+    document.removeEventListener('pointermove', onDragMove);
+    document.removeEventListener('pointerup', onDragEnd);
+    if (drag.currentIndex !== drag.startIndex) {
+      state.settings.dashboardOrder = order; save(LS.settings, state.settings);
     }
     drag = null;
   }
