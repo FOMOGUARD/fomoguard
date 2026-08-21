@@ -98,7 +98,7 @@ export async function onRequestPost(context) {
   if (!keyword) return json(400, { error: '검색 키워드가 없습니다.' });
 
   const query = hasKorean(keyword) ? await translateText(keyword, 'en') : keyword;
-  const dbg = {};
+  const dbg = { query, originalKeyword: keyword };
 
   const [ndArticles, curArticles] = await Promise.all([
     NEWSDATA_KEY ? fetchNewsData(query, NEWSDATA_KEY, dbg) : Promise.resolve([]),
