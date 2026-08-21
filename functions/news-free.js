@@ -30,12 +30,15 @@ function toIsoDate(raw, hasOffset) {
 }
 
 // NewsData.io - 무료 티어에서도 상업적 사용 허용, 하루 200크레딧(기사 최대 2,000건).
-async function fetchNewsData(query, apiKey) {
+async function fetchNewsData(query, apiKey, dbg) {
   const url = `https://newsdata.io/api/1/latest?apikey=${encodeURIComponent(apiKey)}&q=${encodeURIComponent(query)}&language=en`;
   try {
     const res = await fetch(url);
+    const text = await res.text();
+    dbg.newsdata = { status: res.status, bodyPreview: text.slice(0, 300) };
     if (!res.ok) return [];
-    const data = await res.json();
+    let data;
+    try { data = JSON.parse(text); } catch (e) { return []; }
     if (!Array.isArray(data.results)) return [];
     return data.results.map(a => ({
       title: a.title || '',
@@ -45,17 +48,21 @@ async function fetchNewsData(query, apiKey) {
       publishedAt: toIsoDate(a.pubDate, false)
     })).filter(a => a.title && a.url);
   } catch (e) {
+    dbg.newsdata = { error: String(e) };
     return [];
   }
 }
 
 // Currents API - 무료 티어에서도 상업적 사용 허용, 하루 최대 약 250~1,000건, 소스 2만개 이상.
-async function fetchCurrents(query, apiKey) {
+async function fetchCurrents(query, apiKey, dbg) {
   const url = `https://api.currentsapi.services/v1/search?apiKey=${encodeURIComponent(apiKey)}&keywords=${encodeURIComponent(query)}&language=en`;
   try {
     const res = await fetch(url);
+    const text = await res.text();
+    dbg.currents = { status: res.status, bodyPreview: text.slice(0, 300) };
     if (!res.ok) return [];
-    const data = await res.json();
+    let data;
+    try { data = JSON.parse(text); } catch (e) { return []; }
     if (!Array.isArray(data.news)) return [];
     return data.news.map(a => {
       let source = a.author || '';
@@ -69,6 +76,7 @@ async function fetchCurrents(query, apiKey) {
       };
     }).filter(a => a.title && a.url);
   } catch (e) {
+    dbg.currents = { error: String(e) };
     return [];
   }
 }
@@ -90,10 +98,11 @@ export async function onRequestPost(context) {
   if (!keyword) return json(400, { error: '검색 키워드가 없습니다.' });
 
   const query = hasKorean(keyword) ? await translateText(keyword, 'en') : keyword;
+  const dbg = {};
 
   const [ndArticles, curArticles] = await Promise.all([
-    NEWSDATA_KEY ? fetchNewsData(query, NEWSDATA_KEY) : Promise.resolve([]),
-    CURRENTS_KEY ? fetchCurrents(query, CURRENTS_KEY) : Promise.resolve([])
+    NEWSDATA_KEY ? fetchNewsData(query, NEWSDATA_KEY, dbg) : Promise.resolve([]),
+    CURRENTS_KEY ? fetchCurrents(query, CURRENTS_KEY, dbg) : Promise.resolve([])
   ]);
 
   const seen = new Set();
@@ -116,6 +125,7 @@ export async function onRequestPost(context) {
 
   return json(200, {
     articles: top.map(a => ({ title: a.title, description: a.description, url: a.url, source: a.source, publishedAt: a.publishedAt, translated: !!a.translated })),
-    totalArticles: merged.length
+    totalArticles: merged.length,
+    _debug: dbg
   });
 }
