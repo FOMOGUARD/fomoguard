@@ -3,15 +3,18 @@ function json(status, obj) {
 }
 const hasKorean = (s) => /[가-힣]/.test(s || '');
 
-async function translateText(text, target) {
+async function translateText(text, target, dbg) {
   if (!text) return text;
   const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${target}&dt=t&q=${encodeURIComponent(text)}`;
   try {
     const res = await fetch(url);
+    const bodyText = await res.text();
+    if (dbg) dbg.translate = { status: res.status, bodyPreview: bodyText.slice(0, 200) };
     if (!res.ok) return text;
-    const data = await res.json();
+    const data = JSON.parse(bodyText);
     return (data[0] || []).map(seg => seg[0]).join('') || text;
   } catch (e) {
+    if (dbg) dbg.translate = { error: String(e) };
     return text;
   }
 }
@@ -97,8 +100,9 @@ export async function onRequestPost(context) {
   const { keyword } = body;
   if (!keyword) return json(400, { error: '검색 키워드가 없습니다.' });
 
-  const query = hasKorean(keyword) ? await translateText(keyword, 'en') : keyword;
-  const dbg = { query, originalKeyword: keyword };
+  const dbg = { originalKeyword: keyword };
+  const query = hasKorean(keyword) ? await translateText(keyword, 'en', dbg) : keyword;
+  dbg.query = query;
 
   const [ndArticles, curArticles] = await Promise.all([
     NEWSDATA_KEY ? fetchNewsData(query, NEWSDATA_KEY, dbg) : Promise.resolve([]),
