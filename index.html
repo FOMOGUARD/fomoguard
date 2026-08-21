@@ -107,6 +107,9 @@ tailwind.config = {
   .tutorial-navhint { animation: tutorialNavBounce 1s ease-in-out infinite; }
   @keyframes tutorialNavBounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(3px); } }
   .tut-dot { width:6px; height:6px; border-radius:999px; background:#2a3040; transition: background .2s, width .2s; }
+  .quiz-opt { background:#0f1420; transition: border-color .15s, background .15s; }
+  .quiz-opt:not(:disabled):active { border-color:#3182f6; background:#141822; }
+  .quiz-opt-letter { background:#1b202c; color:#8b93a7; }
   .tut-dot.active { background:#3182f6; width:16px; }
 </style>
 </head>
@@ -263,7 +266,7 @@ let state = {
   newsCache: load(LS.newsCache, {}),
   cashFlows: load(LS.cashFlows, []),
   profile: load(LS.profile, null),
-  growth: load(LS.growth, { xp:0, lastLoginXpDate:null, fcXpDate:null, fcXpCount:0, journalXpDate:null, journalXpCount:0, quizAnsweredDate:null, quizCorrect:null }),
+  growth: load(LS.growth, { xp:0, lastLoginXpDate:null, fcXpDate:null, fcXpCount:0, journalXpDate:null, journalXpCount:0, quizAnsweredDate:null, quizCorrect:null, quizPickedIdx:null }),
   settings: load(LS.settings, { provider:'claude', apiKeys:{claude:'',gemini:'',openai:'',grok:''}, models:{claude:'claude-sonnet-5',gemini:'gemini-3.6-flash',openai:'gpt-4.1',grok:'grok-4'}, twelveDataKey:'', newsApiKey:'', tabOrder: REORDERABLE.slice() })
 };
 function sanitizeSettings() {
@@ -1401,6 +1404,7 @@ function submitQuizAnswer(selectedIdx) {
   const correct = selectedIdx === quiz.answer;
   state.growth.quizAnsweredDate = today;
   state.growth.quizCorrect = correct;
+  state.growth.quizPickedIdx = selectedIdx;
   save(LS.growth, state.growth);
   if (correct) grantXp(25, '오늘의 퀴즈 정답! +25 EXP 🌱');
   if (renderers.growth) renderers.growth();
@@ -3035,18 +3039,22 @@ renderers.growth = function() {
       <p class="text-sm font-semibold mb-3">📚 오늘의 투자 상식 퀴즈</p>
       <p class="text-sm mb-3">${escapeHtml(quiz.q)}</p>
       <div id="quiz-options" class="space-y-2 mb-2">
-        ${quiz.options.map((o,i) => `<button data-qi="${i}" class="row p-3 w-full text-left text-sm quiz-opt" ${answeredToday?'disabled':''}>${escapeHtml(o)}</button>`).join('')}
+        ${quiz.options.map((o,i) => {
+          const picked = answeredToday && state.growth.quizPickedIdx === i;
+          const isAnswer = answeredToday && i === quiz.answer;
+          const stateClass = isAnswer ? 'border-good bg-good/10' : (picked ? 'border-bad bg-bad/10' : 'border-line');
+          return `<button data-qi="${i}" class="quiz-opt w-full text-left text-sm flex items-center gap-2.5 p-3 rounded-xl border ${stateClass}" ${answeredToday?'disabled':''}>
+            <span class="quiz-opt-letter flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold">${['A','B','C','D'][i]}</span>
+            <span class="flex-1">${escapeHtml(o)}</span>
+            ${isAnswer ? '<span class="text-good flex-shrink-0">✓</span>' : (picked ? '<span class="text-bad flex-shrink-0">✕</span>' : '')}
+          </button>`;
+        }).join('')}
       </div>
       <div id="quiz-feedback">${answeredToday ? `
-        <p class="text-sm font-bold ${state.growth.quizCorrect?'text-good':'text-bad'} mt-2">${state.growth.quizCorrect?'✅ 정답이에요!':'❌ 아쉬워요, 정답은 "'+escapeHtml(quiz.options[quiz.answer])+'" 이에요.'}</p>
+        <p class="text-sm font-bold ${state.growth.quizCorrect?'text-good':'text-bad'} mt-2">${state.growth.quizCorrect?'✅ 정답이에요!':'❌ 아쉬워요, 정답은 위에 표시해뒀어요.'}</p>
         <p class="text-xs text-muted mt-1">${escapeHtml(quiz.explain)}</p>
         <p class="text-[11px] text-muted mt-2">내일 새로운 문제가 나와요.</p>
       ` : ''}</div>
-    </div>
-
-    <div class="card p-4 mb-4">
-      <p class="text-sm font-semibold mb-2">🏅 계열 칭호 안내</p>
-      <p class="text-xs text-muted leading-relaxed">보유 종목의 원화·달러 비중에 따라 계열이 정해져요. 국내 비중이 높으면 <b class="text-[#eef1f7]">동학개미</b> 계열, 해외 비중이 높으면 <b class="text-[#eef1f7]">서학개미</b> 계열, 비슷하게 섞여있으면 <b class="text-[#eef1f7]">밸런스</b> 계열이에요. 레벨이 오를수록 같은 계열 안에서도 칭호가 더 고급스러워집니다.</p>
     </div>
   `;
   if (!answeredToday) {
