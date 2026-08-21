@@ -357,7 +357,9 @@ const SUPABASE_ANON_KEY = 'sb_publishable_4raTyA00kKvm_rSveM336w_uncSPaNA';
 function isSupabaseConfigured() { return !SUPABASE_URL.includes('YOUR-PROJECT') && !SUPABASE_ANON_KEY.includes('YOUR-ANON'); }
 let supabaseClient = null;
 let currentUser = null;
-const SYNCABLE_KEYS = new Set([LS.principles, LS.portfolio, LS.journal, LS.transactions, LS.factchecks, LS.snapshots, LS.newsKeywords, LS.cashFlows, LS.settings, LS.growth]);
+const SYNCABLE_KEYS = new Set([LS.principles, LS.portfolio, LS.journal, LS.transactions, LS.factchecks, LS.snapshots, LS.newsKeywords, LS.cashFlows, LS.settings]);
+/* growth(레벨/경험치)는 여기 포함하지 않음 — 클라이언트가 임의로 값을 밀어넣지 못하도록
+   전용 테이블(fomoguard_growth) + security definer RPC로만 변경 가능하게 분리했음 */
 let cloudSyncTimer = null;
 function scheduleCloudSync() {
   if (!supabaseClient || !currentUser) return;
@@ -366,7 +368,7 @@ function scheduleCloudSync() {
 }
 async function pushToCloud() {
   if (!supabaseClient || !currentUser) return;
-  const payload = { principles: state.principles, portfolio: state.portfolio, journal: state.journal, transactions: state.transactions, factchecks: state.factchecks, snapshots: state.snapshots, newsKeywords: state.newsKeywords, cashFlows: state.cashFlows, settings: state.settings, growth: state.growth };
+  const payload = { principles: state.principles, portfolio: state.portfolio, journal: state.journal, transactions: state.transactions, factchecks: state.factchecks, snapshots: state.snapshots, newsKeywords: state.newsKeywords, cashFlows: state.cashFlows, settings: state.settings };
   const { error } = await supabaseClient.from('fomoguard_data').upsert({ user_id: currentUser.id, data: payload, updated_at: new Date().toISOString() });
   if (!error) localStorage.setItem('fomoguard_last_cloud_sync', String(Date.now()));
 }
@@ -384,7 +386,6 @@ async function pullFromCloud() {
     if (d.newsKeywords) { state.newsKeywords = d.newsKeywords; save(LS.newsKeywords, state.newsKeywords); }
     if (d.cashFlows) { state.cashFlows = d.cashFlows; save(LS.cashFlows, state.cashFlows); }
     if (d.settings) { state.settings = d.settings; sanitizeSettings(); save(LS.settings, state.settings); }
-    if (d.growth) { state.growth = d.growth; save(LS.growth, state.growth); }
     localStorage.setItem('fomoguard_last_cloud_sync', String(Date.now()));
     if (renderers[currentTab]) renderers[currentTab]();
   } else {
@@ -409,7 +410,7 @@ async function handleSupabaseSession(session, isNewSignIn) {
   renderHeaderProfile();
   if (localStorage.getItem('fomoguard_demo_seed') === '1') clearDemoData();
   await pullFromCloud();
-  grantDailyLoginXp();
+  await grantDailyLoginXp();
   renderHeaderProfile();
   if (isNewSignIn) { hideWelcomeOverlay(); showWelcomeGreeting(state.profile.name); maybeShowTutorial(); }
   if (currentTab === 'settings') renderers.settings();
@@ -1342,25 +1343,68 @@ function computeVibeBadge() {
   if (recentTx.length >= 6) return { emoji:'🐒', title:'침팬치', desc:'최근 일주일 매매가 잦아요. 손이 먼저 나가고 있는 건 아닌지 체크해보세요.' };
   return { emoji:'🧊', title:'냉철 개미', desc:'최근 흐름이 안정적이에요. 지금처럼만 하면 됩니다.' };
 }
+/* 경험치는 로그인 상태에서는 서버(Supabase RPC, security definer)에서만 검증·지급된다 —
+   클라이언트가 state.growth.xp를 직접 늘려도 다음 동기화 때 서버 값으로 되돌아온다.
+   비로그인(게스트) 상태에서만 로컬 전용으로 임시 체험용 XP를 준다 (계정 생성 시 초기화됨). */
 function grantXp(amount, toastMsg) {
   state.growth.xp += amount;
   save(LS.growth, state.growth);
   if (toastMsg) toast(toastMsg, 'success');
 }
-function grantDailyLoginXp() {
+function applyServerGrowth(row, toastMsg) {
+  if (!row) return;
+  const prevXp = state.growth.xp;
+  state.growth = {
+    xp: row.xp,
+    lastLoginXpDate: row.last_login_xp_date,
+    fcXpDate: row.fc_xp_date,
+    fcXpCount: row.fc_xp_count,
+    journalXpDate: row.journal_xp_date,
+    journalXpCount: row.journal_xp_count,
+    quizAnsweredDate: row.quiz_answered_date,
+    quizCorrect: row.quiz_correct,
+    quizPickedIdx: row.quiz_picked_idx
+  };
+  localStorage.setItem(LS.growth, JSON.stringify(state.growth)); // 로컬 캐시 용도(클라우드로 다시 밀어넣지 않음)
+  if (row.xp > prevXp && toastMsg) toast(toastMsg, 'success');
+  renderHeaderProfile();
+  if (currentTab === 'growth' && renderers.growth) renderers.growth();
+}
+async function grantDailyLoginXp() {
+  if (currentUser && supabaseClient) {
+    try {
+      const { data, error } = await supabaseClient.rpc('grant_login_xp');
+      if (!error) applyServerGrowth(data, '오늘의 첫 접속! +10 EXP 🌱');
+    } catch(e) {}
+    return;
+  }
   const today = todayStr();
   if (state.growth.lastLoginXpDate === today) return;
   state.growth.lastLoginXpDate = today;
   grantXp(10, '오늘의 첫 접속! +10 EXP 🌱');
 }
-function grantFactCheckXp() {
+async function grantFactCheckXp() {
+  if (currentUser && supabaseClient) {
+    try {
+      const { data, error } = await supabaseClient.rpc('grant_factcheck_xp');
+      if (!error) applyServerGrowth(data, '포모체크 완료! +15 EXP 🧊');
+    } catch(e) {}
+    return;
+  }
   const today = todayStr();
   if (state.growth.fcXpDate !== today) { state.growth.fcXpDate = today; state.growth.fcXpCount = 0; }
   if (state.growth.fcXpCount >= 3) return;
   state.growth.fcXpCount++;
   grantXp(15, '포모체크 완료! +15 EXP 🧊');
 }
-function grantJournalXp() {
+async function grantJournalXp() {
+  if (currentUser && supabaseClient) {
+    try {
+      const { data, error } = await supabaseClient.rpc('grant_journal_xp');
+      if (!error) applyServerGrowth(data, '투자일지 작성! +15 EXP 📓');
+    } catch(e) {}
+    return;
+  }
   const today = todayStr();
   if (state.growth.journalXpDate !== today) { state.growth.journalXpDate = today; state.growth.journalXpCount = 0; }
   if (state.growth.journalXpCount >= 3) return;
@@ -1398,7 +1442,15 @@ function todayQuiz() {
   const idx = Math.floor(Date.now()/86400000) % QUIZ_BANK.length;
   return QUIZ_BANK[idx];
 }
-function submitQuizAnswer(selectedIdx) {
+async function submitQuizAnswer(selectedIdx) {
+  if (currentUser && supabaseClient) {
+    try {
+      const { data, error } = await supabaseClient.rpc('submit_quiz_xp', { p_picked_idx: selectedIdx });
+      if (!error) applyServerGrowth(data, '오늘의 퀴즈 정답! +25 EXP 🌱');
+    } catch(e) {}
+    if (renderers.growth) renderers.growth();
+    return;
+  }
   const quiz = todayQuiz();
   const today = todayStr();
   const correct = selectedIdx === quiz.answer;
