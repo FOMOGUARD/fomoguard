@@ -1,16 +1,21 @@
 const hasKorean = (s) => /[가-힣]/.test(s || '');
 
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+// 구글 번역 공개 엔드포인트가 짧은 순간 여러 번 호출되면 간헐적으로 429를 반환해서,
+// 짧은 지연을 두고 최대 2번 재시도한다.
 async function translateText(text, target) {
   if (!text) return text;
   const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${target}&dt=t&q=${encodeURIComponent(text)}`;
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return text;
-    const data = await res.json();
-    return (data[0] || []).map(seg => seg[0]).join('') || text;
-  } catch (e) {
-    return text;
+  for (let attempt = 0; attempt <= 2; attempt++) {
+    if (attempt > 0) await sleep(300 * attempt);
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const data = await res.json();
+      return (data[0] || []).map(seg => seg[0]).join('') || text;
+    } catch (e) {}
   }
+  return text;
 }
 
 function toIsoDate(raw, hasOffset) {

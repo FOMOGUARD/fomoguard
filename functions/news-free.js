@@ -2,21 +2,23 @@ function json(status, obj) {
   return new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json' } });
 }
 const hasKorean = (s) => /[가-힣]/.test(s || '');
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-async function translateText(text, target, dbg) {
+// 구글 번역 공개 엔드포인트가 짧은 순간 여러 번 호출되면 간헐적으로 429를 반환해서,
+// 짧은 지연을 두고 최대 2번 재시도한다.
+async function translateText(text, target) {
   if (!text) return text;
   const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${target}&dt=t&q=${encodeURIComponent(text)}`;
-  try {
-    const res = await fetch(url);
-    const bodyText = await res.text();
-    if (dbg) dbg.translate = { status: res.status, bodyPreview: bodyText.slice(0, 200) };
-    if (!res.ok) return text;
-    const data = JSON.parse(bodyText);
-    return (data[0] || []).map(seg => seg[0]).join('') || text;
-  } catch (e) {
-    if (dbg) dbg.translate = { error: String(e) };
-    return text;
+  for (let attempt = 0; attempt <= 2; attempt++) {
+    if (attempt > 0) await sleep(300 * attempt);
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const data = await res.json();
+      return (data[0] || []).map(seg => seg[0]).join('') || text;
+    } catch (e) {}
   }
+  return text;
 }
 
 function toIsoDate(raw, hasOffset) {
@@ -33,15 +35,12 @@ function toIsoDate(raw, hasOffset) {
 }
 
 // NewsData.io - 무료 티어에서도 상업적 사용 허용, 하루 200크레딧(기사 최대 2,000건).
-async function fetchNewsData(query, apiKey, dbg) {
+async function fetchNewsData(query, apiKey) {
   const url = `https://newsdata.io/api/1/latest?apikey=${encodeURIComponent(apiKey)}&q=${encodeURIComponent(query)}&language=en`;
   try {
     const res = await fetch(url);
-    const text = await res.text();
-    dbg.newsdata = { status: res.status, bodyPreview: text.slice(0, 300) };
     if (!res.ok) return [];
-    let data;
-    try { data = JSON.parse(text); } catch (e) { return []; }
+    const data = await res.json();
     if (!Array.isArray(data.results)) return [];
     return data.results.map(a => ({
       title: a.title || '',
@@ -51,21 +50,17 @@ async function fetchNewsData(query, apiKey, dbg) {
       publishedAt: toIsoDate(a.pubDate, false)
     })).filter(a => a.title && a.url);
   } catch (e) {
-    dbg.newsdata = { error: String(e) };
     return [];
   }
 }
 
 // Currents API - 무료 티어에서도 상업적 사용 허용, 하루 최대 약 250~1,000건, 소스 2만개 이상.
-async function fetchCurrents(query, apiKey, dbg) {
+async function fetchCurrents(query, apiKey) {
   const url = `https://api.currentsapi.services/v1/search?apiKey=${encodeURIComponent(apiKey)}&keywords=${encodeURIComponent(query)}&language=en`;
   try {
     const res = await fetch(url);
-    const text = await res.text();
-    dbg.currents = { status: res.status, bodyPreview: text.slice(0, 300) };
     if (!res.ok) return [];
-    let data;
-    try { data = JSON.parse(text); } catch (e) { return []; }
+    const data = await res.json();
     if (!Array.isArray(data.news)) return [];
     return data.news.map(a => {
       let source = a.author || '';
@@ -79,7 +74,6 @@ async function fetchCurrents(query, apiKey, dbg) {
       };
     }).filter(a => a.title && a.url);
   } catch (e) {
-    dbg.currents = { error: String(e) };
     return [];
   }
 }
@@ -100,13 +94,11 @@ export async function onRequestPost(context) {
   const { keyword } = body;
   if (!keyword) return json(400, { error: '검색 키워드가 없습니다.' });
 
-  const dbg = { originalKeyword: keyword };
-  const query = hasKorean(keyword) ? await translateText(keyword, 'en', dbg) : keyword;
-  dbg.query = query;
+  const query = hasKorean(keyword) ? await translateText(keyword, 'en') : keyword;
 
   const [ndArticles, curArticles] = await Promise.all([
-    NEWSDATA_KEY ? fetchNewsData(query, NEWSDATA_KEY, dbg) : Promise.resolve([]),
-    CURRENTS_KEY ? fetchCurrents(query, CURRENTS_KEY, dbg) : Promise.resolve([])
+    NEWSDATA_KEY ? fetchNewsData(query, NEWSDATA_KEY) : Promise.resolve([]),
+    CURRENTS_KEY ? fetchCurrents(query, CURRENTS_KEY) : Promise.resolve([])
   ]);
 
   const seen = new Set();
@@ -129,7 +121,6 @@ export async function onRequestPost(context) {
 
   return json(200, {
     articles: top.map(a => ({ title: a.title, description: a.description, url: a.url, source: a.source, publishedAt: a.publishedAt, translated: !!a.translated })),
-    totalArticles: merged.length,
-    _debug: dbg
+    totalArticles: merged.length
   });
 }
