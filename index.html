@@ -121,6 +121,8 @@ tailwind.config = {
   .quiz-opt:not(:disabled):active { border-color:#3182f6; background:#141822; }
   .quiz-opt-letter { background:#1b202c; color:#8b93a7; }
   .tut-dot.active { background:#3182f6; width:16px; }
+  .info-icon { display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; border-radius:999px; background:#232838; color:#8b93a7; font-size:10px; font-weight:700; font-style:italic; font-family:Georgia,'Times New Roman',serif; vertical-align:middle; margin-left:4px; flex-shrink:0; line-height:1; }
+  .info-icon:active { background:#2a3142; color:#c6cbd9; }
 </style>
 </head>
 <body class="text-[#eef1f7]">
@@ -828,6 +830,31 @@ function closeModal() {
   document.getElementById('modal-root').classList.remove('flex');
 }
 document.getElementById('modal-root').addEventListener('click', e => { if (e.target.id === 'modal-root') closeModal(); });
+
+/* ---------------- 섹션 설명 아이콘 ---------------- */
+const SECTION_INFO = {
+  heroAsset: { title: '총 평가 자산이 뭔가요?', body: '지금 보유한 모든 종목의 평가금액과 현금 잔고를 합친 값이에요. "누적"은 처음 투자를 시작한 뒤로 지금까지의 전체 수익률, "전일대비"는 어제 종가 대비 오늘 하루 동안의 변화예요.' },
+  coreAlpha: { title: '코어·알파가 뭔가요?', body: '코어는 오래 들고 갈 든든한 종목(대형주, 지수 추종 등), 알파는 더 공격적으로 수익을 노려보는 종목이에요. 종목을 등록할 때 직접 정할 수 있고, 티커·종목명을 보고 자동으로 추천해드리기도 해요.' },
+  treemap: { title: '자산 트리맵이 뭔가요?', body: '내 포트폴리오를 사각형 타일로 표현한 지도예요. 타일 크기는 그 종목이 전체에서 차지하는 비중이고, 색은 선택한 기준(누적 수익률 또는 오늘 하루 변화)에 따라 빨강(상승)·파랑(하락)으로 표시돼요. "오늘 변화"를 고르면 finviz 같은 실시간 히트맵처럼 오늘 하루 등락만 볼 수 있어요.' },
+  donutShare: { title: '비중 차트가 뭔가요?', body: '전체 자산에서 각 종목(또는 코어·알파 구분)이 차지하는 비율을 원그래프로 보여줘요. 한 종목에 너무 쏠려있지 않은지 확인할 때 유용해요.' },
+  contribution: { title: '수익 기여도가 뭔가요?', body: '각 종목이 내 전체 손익에 실제로 얼마나 기여했는지(원화 기준 금액)를 보여줘요. 수익률이 높아도 투자한 비중이 작으면 기여도는 낮을 수 있어요.' },
+  trend: { title: '자산가치 추이가 뭔가요?', body: '매일 기록되는 내 포트폴리오 평가금액의 변화를 그래프로 보여줘요. 꾸준히 우상향하는지, 변동이 큰지 한눈에 볼 수 있어요.' },
+  dailyAnalysis: { title: 'AI 데일리 분석이 뭔가요?', body: '실시간 뉴스가 아니라, 오늘의 시장 지표와 내가 등록한 포트폴리오·투자원칙을 근거로 AI가 참고용으로 짧게 남기는 코멘트예요. 투자 조언이 아니라 스스로 판단할 때 참고하는 용도로 봐주세요.' },
+  portfolioDaily: { title: '전일대비·누적 수익률이 뭔가요?', body: '"전일대비"는 어제 종가 대비 오늘 이 종목이 몇 % 움직였는지예요. 실제 증권 앱에서 보는 등락률과 같은 개념이에요. "누적"(오른쪽 위 굵은 %)은 내가 처음 산 평단가 대비 지금까지 전체 수익률이고요. 시세를 새로고침해야 전일대비 값이 최신으로 갱신돼요.' },
+  growthLevel: { title: '레벨·경험치가 뭔가요?', body: '포모체크, 투자일지 작성, 매일 퀴즈 등 꾸준한 활동을 하면 경험치(XP)가 쌓이고 레벨이 올라요. 칭호는 레벨과 내 포트폴리오 성향(국내/해외/밸런스)에 따라 달라져요.' },
+  factcheckQty: { title: '포모체크가 뭔가요?', body: '지금 사려는 수량을 입력하면, 실시간 시세로 예상 매수금액을 자동 계산하고 내가 등록한 투자원칙에 비추어 AI가 냉정하게 검증해줘요.' },
+  journalTx: { title: '거래내역이 뭔가요?', body: '매수·매도, 현금 입금·출금 기록이 시간순으로 모두 모이는 곳이에요. 한국식 표기대로 매수는 빨강, 매도는 파랑으로 표시돼요.' }
+};
+function infoIcon(key) {
+  return `<button type="button" class="info-icon" data-info-key="${key}" aria-label="설명 보기">i</button>`;
+}
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.info-icon');
+  if (!btn) return;
+  const info = SECTION_INFO[btn.dataset.infoKey];
+  if (!info) return;
+  openModal(info.title, `<p class="text-sm text-[#c6cbd9] leading-relaxed">${info.body}</p>`, `<button class="btn-brand w-full py-2.5 rounded-xl text-sm font-bold" onclick="closeModal()">확인했어요</button>`);
+});
 function confirmModal(title, desc, onConfirm, confirmLabel='삭제') {
   openModal(title, `<p class="text-sm text-muted">${desc}</p>`, `
     <button class="btn-ghost px-4 py-2.5 rounded-xl text-sm" onclick="closeModal()">취소</button>
@@ -870,6 +897,16 @@ function retColor(ret) {
   if (ret === 0) return '#3a4152';
   if (ret > -5) return '#7fb0fb';
   if (ret > -15) return '#4f8bf5';
+  return '#2563d9';
+}
+function dailyRetColor(ret) {
+  if (ret === undefined || ret === null) return '#3a4152';
+  if (ret > 3) return '#c81e2c';
+  if (ret > 1) return '#e34350';
+  if (ret > 0) return '#f2828c';
+  if (ret === 0) return '#3a4152';
+  if (ret > -1) return '#7fb0fb';
+  if (ret > -3) return '#4f8bf5';
   return '#2563d9';
 }
 function quoteOfTheDay() {
@@ -1950,6 +1987,7 @@ function squarify(items, x, y, w, h) {
   recurse(scaled, [], x, y, w, h);
   return rects;
 }
+let treemapMode = 'total';
 function renderTreemap() {
   const container = document.getElementById('treemap-wrap');
   if (!container) return;
@@ -1964,6 +2002,7 @@ function renderTreemap() {
   if (coreVal>0 && satVal>0) { hCore = Math.min(Math.max(totalH*coreVal/totalVal, 50), totalH-50); }
   else if (coreVal>0) { hCore = totalH; } else { hCore = 0; }
   const hSat = totalH - hCore;
+  const isDaily = treemapMode === 'daily';
 
   function bandHtml(holdings, val, label, bandH) {
     if (!holdings.length || bandH<=0) return '';
@@ -1971,16 +2010,20 @@ function renderTreemap() {
     const rects = squarify(items, 0, 0, w, bandH);
     const tiles = rects.map(r => {
       const h = r.h;
-      const ret = h.avgPrice>0 ? (h.currentPrice-h.avgPrice)/h.avgPrice*100 : 0;
-      const color = retColor(ret);
+      const ret = isDaily ? h.dailyChangePct : (h.avgPrice>0 ? (h.currentPrice-h.avgPrice)/h.avgPrice*100 : 0);
+      const color = isDaily ? dailyRetColor(ret) : retColor(ret);
       const showText = r.rw>44 && r.rh>28;
+      const retLabel = (isDaily && ret===undefined) ? '-' : fmtPct(ret);
       return `<div class="absolute rounded-[6px] flex flex-col items-center justify-center overflow-hidden" style="left:${r.rx}px;top:${r.ry}px;width:${Math.max(r.rw-2,0)}px;height:${Math.max(r.rh-2,0)}px;background:${color}">
-        ${showText ? `<span class="text-[11px] font-bold leading-tight px-1 truncate w-full text-center text-white">${escapeHtml(h.name)}</span><span class="text-[10px] leading-tight text-white/90">${fmtPct(ret)}</span>` : ''}
+        ${showText ? `<span class="text-[11px] font-bold leading-tight px-1 truncate w-full text-center text-white">${escapeHtml(h.name)}</span><span class="text-[10px] leading-tight text-white/90">${retLabel}</span>` : ''}
       </div>`;
     }).join('');
     return `<p class="text-[11px] text-muted font-semibold mb-1">${label} · ${fmtWon(val)}</p><div class="relative mb-2" style="width:100%;height:${bandH}px">${tiles}</div>`;
   }
   container.innerHTML = bandHtml(coreHoldings, coreVal, '🔵 코어', hCore) + bandHtml(satHoldings, satVal, '🟢 알파', hSat);
+  if (isDaily && state.portfolio.some(h=>h.dailyChangePct===undefined)) {
+    container.innerHTML += `<p class="text-[10px] text-muted mt-1">회색 타일은 오늘 시세가 갱신되지 않은 종목이에요. "시세 새로고침"을 눌러보세요.</p>`;
+  }
 }
 
 /* ================= DASHBOARD ================= */
@@ -2023,13 +2066,13 @@ renderers.dashboard = function() {
       </button>
       <div class="row p-3"><p class="text-[10px] text-muted mb-1">총 매수금액</p><p class="text-sm font-bold">${fmtWon(totalCost)}</p></div>
       <div class="row p-3"><p class="text-[10px] text-muted mb-1">총 손익금액</p><p class="text-sm font-bold ${pnlColor}">${totalPnl>=0?'+':''}${fmtWon(totalPnl)}</p></div>
-      <div class="row p-3"><p class="text-[10px] text-muted mb-1">코어 포트폴리오 수익률</p><p class="text-sm font-bold ${coreColor}">${coreCost>0?fmtPct(coreReturnPct):'-'}</p></div>
+      <div class="row p-3"><p class="text-[10px] text-muted mb-1">코어 포트폴리오 수익률${infoIcon('coreAlpha')}</p><p class="text-sm font-bold ${coreColor}">${coreCost>0?fmtPct(coreReturnPct):'-'}</p></div>
       <div class="row p-3"><p class="text-[10px] text-muted mb-1">알파 포트폴리오 수익률</p><p class="text-sm font-bold ${satColor}">${satCost>0?fmtPct(satReturnPct):'-'}</p></div>
     </div>
     <button id="btn-refresh-market" class="text-[11px] text-brand font-semibold mb-4 flex items-center gap-1">🔄 환율·시세·지수·뉴스 새로고침</button>`,
     market: `
     <div class="card p-4 mb-3">
-      <p class="text-sm font-semibold mb-3">📰 오늘의 시장 &amp; AI 데일리 분석</p>
+      <p class="text-sm font-semibold mb-3">📰 오늘의 시장 &amp; AI 데일리 분석${infoIcon('dailyAnalysis')}</p>
       ${state.marketSnapshot && state.marketSnapshot.date===todayStr() ? `
         <div class="grid grid-cols-3 gap-2 mb-3">
           ${state.marketSnapshot.items.map(i => `<div class="row p-2.5 text-center"><p class="text-[10px] text-muted mb-1">${i.label}</p><p class="text-xs font-bold ${i.pct>=0?'text-up':'text-down'}">${fmtPct(i.pct)}</p></div>`).join('')}
@@ -2041,13 +2084,18 @@ renderers.dashboard = function() {
     </div>`,
     treemap: hasData ? `
     <div class="card p-4 mb-3">
-      <p class="text-sm font-semibold mb-3">🗺️ 자산 트리맵 <span class="text-[11px] text-muted font-normal">· 코어/알파 · 크기=비중, 색=수익률</span></p>
+      <div class="flex items-center justify-between mb-3 gap-2">
+        <p class="text-sm font-semibold">🗺️ 자산 트리맵${infoIcon('treemap')} <span class="text-[11px] text-muted font-normal">· 크기=비중</span></p>
+        <div class="seg" style="width:150px;flex-shrink:0" id="treemap-seg">
+          <button data-m="total">누적</button><button data-m="daily">오늘 변화</button>
+        </div>
+      </div>
       <div id="treemap-wrap"></div>
     </div>` : '',
     donuts: hasData ? `
     <div class="grid grid-cols-2 gap-3 mb-3">
       <div class="card p-3">
-        <p class="text-xs font-semibold mb-2">종목별 비중</p>
+        <p class="text-xs font-semibold mb-2">종목별 비중${infoIcon('donutShare')}</p>
         <canvas id="chart-donut" height="140"></canvas>
         <div id="legend-donut" class="mt-2 space-y-1"></div>
       </div>
@@ -2059,12 +2107,12 @@ renderers.dashboard = function() {
     </div>` : '',
     contribution: `
     <div class="card p-4 mb-3">
-      <p class="text-sm font-semibold mb-3">💹 종목별 수익 기여도 <span class="text-[11px] text-muted font-normal">· 보유중 평가손익 + 실현손익</span></p>
+      <p class="text-sm font-semibold mb-3">💹 종목별 수익 기여도${infoIcon('contribution')} <span class="text-[11px] text-muted font-normal">· 보유중 평가손익 + 실현손익</span></p>
       <div id="contribution-wrap"></div>
     </div>`,
     trend: hasData ? `
     <div class="card p-4 mb-3">
-      <p class="text-sm font-semibold mb-3">자산가치 추이</p>
+      <p class="text-sm font-semibold mb-3">자산가치 추이${infoIcon('trend')}</p>
       ${state.snapshots.length > 1 ? '<canvas id="chart-trend" height="160"></canvas>' : '<p class="text-xs text-muted py-6 text-center">이틀 이상 기록되면 추이가 표시됩니다</p>'}
     </div>` : '',
     shortcuts: `
@@ -2097,7 +2145,7 @@ renderers.dashboard = function() {
 
   el.innerHTML = `
     <div class="hero-card rounded-[26px] p-5 mt-2 mb-3">
-      <p class="text-xs text-muted mb-1.5">총 평가 자산 (원화 기준)</p>
+      <p class="text-xs text-muted mb-1.5">총 평가 자산 (원화 기준)${infoIcon('heroAsset')}</p>
       <p class="text-[32px] font-extrabold leading-tight tracking-tight">${fmtWon(totalAssets)}</p>
       ${hasData ? `<div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
         <span class="badge ${totalPnlPct>0?'bg-up/15 text-up':totalPnlPct<0?'bg-down/15 text-down':'bg-line text-muted'}">누적 ${arrow} ${fmtPct(totalPnlPct)}</span>
@@ -2166,6 +2214,13 @@ renderers.dashboard = function() {
   }
 
   if (hasData) {
+    const treemapSeg = document.getElementById('treemap-seg');
+    if (treemapSeg) {
+      treemapSeg.querySelectorAll('button').forEach(b => {
+        b.classList.toggle('active', b.dataset.m === treemapMode);
+        b.onclick = () => { treemapMode = b.dataset.m; treemapSeg.querySelectorAll('button').forEach(x=>x.classList.toggle('active', x===b)); renderTreemap(); };
+      });
+    }
     renderTreemap();
 
     const palette = ['#3182f6','#f04452','#00c896','#ffb800','#8b5cf6','#22d3ee','#f472b6','#facc15'];
@@ -2214,7 +2269,7 @@ renderers.dashboard = function() {
 renderers.factcheck = function() {
   const el = document.getElementById('panel-factcheck');
   el.innerHTML = `
-    <h2 class="font-bold text-xl mt-2 mb-1">🧊 포모체크</h2>
+    <h2 class="font-bold text-xl mt-2 mb-1">🧊 포모체크${infoIcon('factcheckQty')}</h2>
     <p class="text-xs text-muted mb-4">지금 하려는 투자를 입력하면, 등록된 나의 원칙에 비추어 AI가 냉철하게 검증합니다</p>
 
     <div class="card p-4 mb-4 space-y-3">
@@ -2414,7 +2469,7 @@ renderers.portfolio = function() {
   const lastSync = localStorage.getItem('fomoguard_last_sync_date');
   el.innerHTML = `
     <div class="flex items-center justify-between mt-2 mb-3">
-      <h2 class="font-bold text-xl">💼 포트폴리오</h2>
+      <h2 class="font-bold text-xl">💼 포트폴리오${infoIcon('portfolioDaily')}</h2>
       <button id="btn-add-holding" class="btn-brand text-xs px-3.5 py-2.5 rounded-xl font-bold">+ 종목 추가</button>
     </div>
     <div class="flex items-center justify-between mb-3">
@@ -2442,17 +2497,19 @@ renderers.portfolio = function() {
       const { value, cost } = holdingKRW(h);
       const ret = cost>0 ? (value-cost)/cost*100 : 0;
       const retColorCls = ret>0?'text-up':ret<0?'text-down':'text-muted';
+      const dailyColorCls = h.dailyChangePct>0?'text-up':h.dailyChangePct<0?'text-down':'text-muted';
+      const dailyInline = h.dailyChangePct!==undefined ? ` <span class="${dailyColorCls} font-bold">${h.dailyChangePct>0?'▲':h.dailyChangePct<0?'▼':''}${fmtPct(h.dailyChangePct)}</span>` : '';
       return `<div class="card p-4">
         <div class="flex items-start justify-between">
           <div>
             <p class="font-semibold text-sm">${escapeHtml(h.name)} <span class="badge ${h.type==='core'?'bg-brand/15 text-brand':'bg-good/15 text-good'}">${h.type==='core'?'코어':'알파'}</span></p>
-            <p class="text-xs text-muted mt-1">${h.quantity}주 · 평단 ${fmtPrice(h.avgPrice,cur)} · 현재가 ${fmtPrice(h.currentPrice,cur)}</p>
+            <p class="text-xs text-muted mt-1">${h.quantity}주 · 평단 ${fmtPrice(h.avgPrice,cur)} · 현재가 ${fmtPrice(h.currentPrice,cur)}${dailyInline}</p>
             ${h.ticker ? `<p class="text-[10px] text-muted mt-0.5">${escapeHtml(h.ticker)}${h.exchange?' · '+h.exchange:''} · 시세 ${timeAgo(h.priceUpdatedAt)} 갱신</p>` : ''}
           </div>
           <div class="text-right">
+            <p class="text-[9px] text-muted">누적</p>
             <p class="text-sm font-bold ${retColorCls}">${fmtPct(ret)}</p>
-            ${h.dailyChangePct!==undefined ? `<p class="text-[10px] mt-0.5 ${h.dailyChangePct>0?'text-up':h.dailyChangePct<0?'text-down':'text-muted'}">전일대비 ${h.dailyChangePct>0?'▲':h.dailyChangePct<0?'▼':''} ${fmtPct(h.dailyChangePct)}</p>` : ''}
-            <p class="text-xs text-muted">${fmtWon(value)}${cur==='USD'?' (환산)':''}</p>
+            <p class="text-xs text-muted mt-0.5">${fmtWon(value)}${cur==='USD'?' (환산)':''}</p>
           </div>
         </div>
         <div class="flex gap-2 mt-3">
@@ -2847,6 +2904,7 @@ renderers.journal = function() {
     <div class="seg mb-3" id="jr-seg">
       <button data-m="diary">📔 일기</button><button data-m="transactions">💱 거래내역</button><button data-m="all">🕒 전체</button>
     </div>
+    ${journalViewMode==='transactions' ? `<p class="text-[11px] text-muted mb-3">매수·매도, 현금 입출금 기록이 여기 모여요${infoIcon('journalTx')}</p>` : ''}
     <input id="jr-search" type="text" placeholder="🔍 제목, 내용, 해시태그, 종목명 검색" value="${escapeHtml(journalSearchQuery)}" class="mb-3">
     ${allTags.length && journalViewMode!=='transactions' ? `<div class="flex gap-1.5 flex-wrap mb-3">
       <button data-tag="" class="chip ${journalHashtagFilter===''?'active':''}">전체</button>
@@ -2919,7 +2977,7 @@ function renderJournalList() {
     <div class="card p-4">
       <div class="flex items-center justify-between mb-1">
         <p class="text-sm font-semibold">${it.date} (${weekdayKR(it.date)})</p>
-        <span class="badge ${it.type==='buy'?'bg-brand/15 text-brand':'bg-bad/15 text-bad'}">${it.type==='buy'?'매수':'매도'}</span>
+        <span class="badge ${it.type==='buy'?'bg-bad/15 text-bad':'bg-brand/15 text-brand'}">${it.type==='buy'?'매수':'매도'}</span>
       </div>
       <p class="text-sm font-medium">${escapeHtml(it.name)}</p>
       <p class="text-xs text-muted mt-1">${it.quantity}주 · ${fmtPrice(it.price, it.currency)}</p>
@@ -3261,7 +3319,7 @@ renderers.growth = function() {
   const quiz = todayQuiz();
   const answeredToday = state.growth.quizAnsweredDate === todayStr();
   el.innerHTML = `
-    <h2 class="font-bold text-xl mt-2 mb-1">🌱 성장</h2>
+    <h2 class="font-bold text-xl mt-2 mb-1">🌱 성장${infoIcon('growthLevel')}</h2>
     <p class="text-xs text-muted mb-4">매일 조금씩 배우고, 활동할수록 레벨이 오릅니다. 초반엔 금방 오르지만 갈수록 더 많은 경험치가 필요해요.</p>
 
     <div class="hero-card rounded-[26px] p-5 mb-4">
