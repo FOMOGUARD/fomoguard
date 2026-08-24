@@ -32,7 +32,7 @@
   - 동기화 대상(`SYNCABLE_KEYS`): principles, portfolio, journal, transactions, factchecks, snapshots, newsKeywords, cashFlows, settings(API 키 포함). **growth(레벨/XP)는 여기 포함 안 됨** — 아래 성장 테이블에서 서버 검증으로 별도 관리.
   - 로그인 상태에서 다른 기기의 변경사항을 반영하기 위해 **탭 포커스/visibility 복귀 시 자동으로 클라우드를 다시 pull**함(로컬에 아직 push 안 된 변경이 있으면 스킵, 너무 잦은 재호출은 스로틀).
 - **AI 사용량 제한 테이블**: `fomoguard_ai_usage` + RPC `increment_ai_usage(p_cap)` — 하루 3회 무료 AI 사용량 카운트. SQL은 `supabase-ai-usage.sql` 참고. (이미 실행 완료된 것으로 보임)
-- **성장(레벨/XP) 테이블 — ⚠️ SQL 실행 필요**: `fomoguard_growth` + RPC 4종(`grant_login_xp`, `grant_factcheck_xp`, `grant_journal_xp`, `submit_quiz_xp`). SQL은 `supabase-growth.sql`. **아직 Supabase SQL 에디터에서 실행 안 됨** — 실행 전까지는 로그인 사용자도 XP가 서버에 저장되지 않고 조용히 무시됨(에러 없이 그냥 안 쌓임). 예전엔 클라이언트가 XP를 직접 계산해서 클라우드에 올렸는데, devtools로 조작 가능한 취약점이라 서버 검증(RLS: SELECT만 허용, INSERT/UPDATE는 전부 security-definer RPC를 통해서만)으로 바꾼 것.
+- **성장(레벨/XP) 테이블**: `fomoguard_growth` + RPC 4종(`grant_login_xp`, `grant_factcheck_xp`, `grant_journal_xp`, `submit_quiz_xp`). SQL은 `supabase-growth.sql`. **실행 완료 확인됨(2026-08-24)** — 익명 키로 RPC를 직접 호출해서 `fomoguard_growth` 테이블·함수가 실제로 존재하는 것을 검증함(비로그인 호출은 `user_id` NOT NULL 제약으로 정상 거부되는 것까지 확인, 로그인 사용자는 정상적으로 XP가 쌓임). 예전엔 클라이언트가 XP를 직접 계산해서 클라우드에 올렸는데, devtools로 조작 가능한 취약점이라 서버 검증(RLS: SELECT만 허용, INSERT/UPDATE는 전부 security-definer RPC를 통해서만)으로 바꾼 것.
 - **AI 프로바이더**: 기본은 Claude/Gemini/OpenAI/Grok 중 사용자가 본인 키 등록(무제한). 로그인만 한 사용자는 `/ai-free` 프록시를 통해 하루 3회 무료(Gemini, 서버 공유 키 사용, 클라이언트에 키 노출 안 됨).
 
 ## 4. 작업 이력 (세션별, 최신순)
@@ -42,6 +42,7 @@
 1. **브랜드 컬러/로고/캐릭터명 1차 컨셉 논의** (코드 미반영, 논의만): 브랜드 컬러는 토스블루(#3182f6)와 겹치지 않으면서도 그 임팩트에 근접한 **#1E8FFF(아이스블루)**로, 로고는 앱 안에서 이미 "냉철함"을 상징하던 🧊를 모티브로 한 **각얼음 캐릭터 로고**(굵은 외곽선 + 둥근 형태로 캐릭터 일러스트 스타일과 통일감), 캐릭터명은 **"워니"**로 논의 완료. 사용자가 이 내용을 다른 AI에게 전달해 최종 로고 아트를 뽑아올 예정 — **받으면 코드(브랜드 컬러 변수, 파비콘, 앱아이콘, 헤더 워드마크)에 적용 필요**.
 2. **세션 3에서 다른 컴퓨터가 푸시한 커밋 학습·검증**: `git pull`로 반영된 세션 3의 마지막 두 커밋(HANDOFF.md 갱신 + 트리맵 누적/오늘변화 토글·섹션 설명 아이콘·포트폴리오 인라인 전일대비·매수매도 색상 수정 커밋)을 diff로 정확히 파악하고, 실제 배포 서버에서 트리맵 토글 전환·포트폴리오 인라인 표시가 정상 작동하는 것까지 직접 확인함.
 3. `NEWSDATA_SHARED_KEY`/`CURRENTS_SHARED_KEY` Cloudflare 환경변수 등록 완료 및 실제 배포 서버에서 정상 작동 확인(위 3번 섹션 갱신 반영).
+4. **`supabase-growth.sql` 실행 여부 확인**: 대시보드 로그인 없이도, `SUPABASE_ANON_KEY`로 growth RPC(예: `grant_login_xp`)를 인증 없이 직접 호출해보면 알 수 있음 — 테이블/함수가 없으면 "Could not find the function" 류의 404가 오고, 있으면 `user_id` NOT NULL 위반 같은 정상적인 DB 에러가 옴(비로그인 호출이라 막히는 게 정상이므로 이 에러가 곧 "실행됨"의 증거). 실제로 호출해서 후자를 확인 → 실행 완료로 판정함.
 
 ### 세션 3 — 2026-08-21~22, 다른 컴퓨터
 
@@ -86,14 +87,14 @@
 - **구글 번역 공개 엔드포인트(`translate.googleapis.com`)**: 짧은 시간 연속 호출 시 간헐적으로 429 반환 — 재시도 로직 필요(뉴스 번역, `/news-free`에 이미 반영됨).
 - **Yahoo Finance 기반 무료 시세(`/price-free`)**: 키 불필요, TwelveData 키가 없거나 실패했을 때 자동 폴백으로 사용.
 - **로컬 개발 서버**: `.claude/launch.json`에 `fomoguard` 설정 있음(`npx serve fomoguard -l 5544`, 이 컴퓨터는 Node를 새로 설치해서 PATH 문제로 `run-fomoguard.cmd` 래퍼를 씀 — 새 터미널을 열면 PATH가 정상 반영되어 원래 커맨드로도 됨). `/ai-free`, `/news-proxy`, `/news-free`, `/price-free` 같은 Functions는 로컬 static 서버에서는 404남(정상, Cloudflare에만 존재) — 실제 동작 확인은 배포 후 검증.
-- **XP 조작 방지**: 성장(레벨/XP)은 클라이언트 계산을 신뢰하지 않음 — 반드시 Supabase RPC(security-definer)를 거쳐야 하고, `supabase-growth.sql` 실행 전까지는 로그인 사용자도 XP가 서버에 쌓이지 않음(조용히 무시, 에러 없음). 비로그인 게스트는 예전처럼 로컬 전용 폴백 유지.
+- **XP 조작 방지**: 성장(레벨/XP)은 클라이언트 계산을 신뢰하지 않음 — 반드시 Supabase RPC(security-definer)를 거쳐야 함(`supabase-growth.sql` 실행 완료 확인됨). 비로그인 게스트는 예전처럼 로컬 전용 폴백 유지.
 - **이미지 처리**: 프로젝트 루트 `node_modules`에 `sharp` 설치되어 있어서 마스코트 자산 가공에 사용함. sharp의 raw buffer 체이닝에서 `extract().trim()`을 한 파이프라인에 묶으면 에러 나는 경우가 있었음 → 두 단계로 분리(encode 후 재로드)하면 해결됨.
 - **JS 코드 문법 검사**: `index.html`의 `<script>` 블록만 추출해서 `node --check`로 검증하는 방식을 계속 사용함(별도 빌드 도구 없음).
 - **`functions/`와 `netlify/functions/`는 항상 쌍으로 수정**: 두 폴더에 거의 동일한 로직이 미러링되어 있음(Netlify는 롤백 대비용이라 실사용은 안 하지만, 로직이 갈라지면 나중에 헷갈림).
 
 ## 6. 다음에 하면 좋을 것들 (미결 아이디어/작업, 확정 아님)
 
-- **⚠️ 우선순위 높음 — `supabase-growth.sql`을 Supabase SQL 에디터에서 실행 (아직 미확인)**: 안 하면 로그인 사용자의 XP 적립이 서버에 저장되지 않음. 실행 여부가 대화 기록상 확인되지 않아 다음 세션 시작 시 사용자에게 직접 확인할 것.
+- ~~`supabase-growth.sql` 실행~~ — 2026-08-24 실행 완료 확인함(익명 키로 RPC 직접 호출해서 테이블·함수 존재 검증).
 - ~~Cloudflare에 `NEWSDATA_SHARED_KEY`, `CURRENTS_SHARED_KEY` 환경변수 등록~~ — 2026-08-24 완료, 배포 서버에서 정상 작동 확인함.
 - 브랜드 컬러(#1E8FFF 아이스블루)·로고(각얼음 모티브)·캐릭터명("워니") 1차 컨셉 논의는 끝났지만 **아직 실제 코드에 적용 안 됨** — 사용자가 다른 AI로 최종 로고 아트를 뽑아온 뒤 적용하기로 함. 지금 코드는 여전히 기존 브랜드 컬러(#3182f6, 토스블루와 동일) 그대로임.
 - 서비스명 최종 확정 → 전체 치환 + 도메인/GitHub repo 이름도 바꿀지 결정
