@@ -337,8 +337,25 @@ function ownKeyApiError(providerLabel, status, rawText) {
     : '';
   return new Error(`${providerLabel} API 오류 (${status})${hint}: ${rawText.slice(0,200)}`);
 }
+// 본인 키 호출이 실패하면(쿼터·결제 문제, 일시 오류 등 무엇이든) 무료 공유 경로로 자동 대체한다.
+// 이러면 "본인 키에 문제가 생겨도 분석 자체는 일단 나온다"가 보장돼서, 이 기능이 통째로 멈추는
+// 일은 더 이상 없어야 한다. 무료 경로까지 실패하면 그때는 원래(본인 키) 오류를 그대로 보여준다
+// (그게 더 근본적인 원인일 가능성이 높아서).
 async function callAI({ system, user, maxTokens=1024 }) {
   if (!hasApiKey()) return callFreeAI({ system, user, maxTokens });
+  try {
+    return await callAIWithOwnKey({ system, user, maxTokens });
+  } catch (e) {
+    try {
+      const text = await callFreeAI({ system, user, maxTokens });
+      toast(`등록하신 API 키 호출에 실패해 무료 AI로 대신 생성했어요. (${e.message.slice(0,60)})`, 'warn');
+      return text;
+    } catch (e2) {
+      throw e;
+    }
+  }
+}
+async function callAIWithOwnKey({ system, user, maxTokens=1024 }) {
   const provider = state.settings.provider || 'claude';
   const apiKey = (state.settings.apiKeys||{})[provider];
   const model = (state.settings.models||{})[provider] || AI_PROVIDERS[provider].defaultModel;
