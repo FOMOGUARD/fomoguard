@@ -21,7 +21,7 @@ function dictLookup(keyword) {
   return KEYWORD_DICTIONARY[keyword.trim().toLowerCase()] || null;
 }
 
-async function translateBatchWithGemini(items, targetLang, geminiKey) {
+async function translateBatchWithGemini(items, targetLang, geminiKey, quotaFlag) {
   if (!geminiKey || !items.length) return items;
   const nonEmpty = items.some(t => (t || '').trim());
   if (!nonEmpty) return items;
@@ -33,7 +33,10 @@ async function translateBatchWithGemini(items, targetLang, geminiKey) {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 4000 } })
     });
-    if (!res.ok) return items;
+    if (!res.ok) {
+      if (res.status === 429 && quotaFlag) quotaFlag.hit = true;
+      return items;
+    }
     const data = await res.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     if (!text) return items;
@@ -121,13 +124,14 @@ exports.handler = async (event) => {
   const { keyword } = body;
   if (!keyword) return { statusCode: 400, body: JSON.stringify({ error: '검색 키워드가 없습니다.' }) };
 
+  const quotaFlag = { hit: false };
   let query = keyword;
   if (hasKorean(keyword)) {
     const dict = dictLookup(keyword);
     if (dict) {
       query = dict;
     } else {
-      const [translated] = await translateBatchWithGemini([keyword], 'en', GEMINI_KEY);
+      const [translated] = await translateBatchWithGemini([keyword], 'en', GEMINI_KEY, quotaFlag);
       query = translated || keyword;
     }
   }
@@ -152,7 +156,7 @@ exports.handler = async (event) => {
   if (needsTranslation.length) {
     const flat = [];
     needsTranslation.forEach(a => { flat.push(a.title); flat.push(a.description); });
-    const translated = await translateBatchWithGemini(flat, 'ko', GEMINI_KEY);
+    const translated = await translateBatchWithGemini(flat, 'ko', GEMINI_KEY, quotaFlag);
     needsTranslation.forEach((a, i) => {
       const newTitle = translated[i * 2];
       const newDesc = translated[i * 2 + 1];
@@ -165,7 +169,8 @@ exports.handler = async (event) => {
     statusCode: 200,
     body: JSON.stringify({
       articles: top.map(a => ({ title: a.title, description: a.description, url: a.url, source: a.source, publishedAt: a.publishedAt, translated: !!a.translated })),
-      totalArticles: merged.length
+      totalArticles: merged.length,
+      translationLimited: quotaFlag.hit
     })
   };
 };

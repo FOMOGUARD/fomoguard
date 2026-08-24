@@ -69,6 +69,9 @@ export async function onRequestPost(context) {
   }
   if (!geminiRes.ok) {
     const t = await geminiRes.text();
+    if (geminiRes.status === 429) {
+      return json(429, { error: '오늘의 무료 AI 사용량이 모두 소진됐어요(전체 이용자 공통 한도). 설정에서 본인 API 키를 등록하면 제한 없이 계속 이용할 수 있어요.' });
+    }
     return json(502, { error: `AI 서버 오류: ${t.slice(0, 200)}` });
   }
   const data = await geminiRes.json();

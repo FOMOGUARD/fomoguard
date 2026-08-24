@@ -1779,21 +1779,22 @@ async function fetchNewsForKeywordFree(keyword) {
   if (!Array.isArray(data.articles)) throw new Error('뉴스 응답 형식이 예상과 다릅니다.');
   return {
     totalFound: data.totalArticles ?? data.articles.length,
-    articles: data.articles.map(a => ({ title:a.title||'', url:a.url||'#', source:a.source||'', publishedAt:a.publishedAt||'', description:a.description||'', translated:!!a.translated }))
+    articles: data.articles.map(a => ({ title:a.title||'', url:a.url||'#', source:a.source||'', publishedAt:a.publishedAt||'', description:a.description||'', translated:!!a.translated })),
+    translationLimited: !!data.translationLimited
   };
 }
 // 이미 본인 GNews 키를 등록한 계정은 그대로 GNews(유료) 경로를 쓰고,
 // 등록하지 않은 계정은 키 없이도 쓸 수 있는 구글 뉴스 무료 경로를 자동으로 쓴다.
 async function fetchNewsForKeyword(keyword) {
   const key = state.settings.newsApiKey;
-  const { totalFound, articles } = key ? await fetchNewsForKeywordPaid(keyword, key) : await fetchNewsForKeywordFree(keyword);
+  const { totalFound, articles, translationLimited } = key ? await fetchNewsForKeywordPaid(keyword, key) : await fetchNewsForKeywordFree(keyword);
   let items = articles.map(a => ({ ...a, sentiment: classifyNewsSentiment(`${a.title||''} ${a.description||''}`) }));
   const cutoff = Date.now() - 3*86400000;
   items = items.filter(it => { const t = Date.parse(it.publishedAt); return !isNaN(t) && t >= cutoff; });
   items.sort((a,b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt));
   items = items.slice(0, 10);
   items.totalFound = totalFound;
-  state.newsCache[keyword] = { date: todayStr(), items, totalFound: items.totalFound, v: NEWS_CACHE_VERSION };
+  state.newsCache[keyword] = { date: todayStr(), items, totalFound: items.totalFound, v: NEWS_CACHE_VERSION, translationLimited: !!translationLimited };
   save(LS.newsCache, state.newsCache);
   return items;
 }
@@ -1882,6 +1883,14 @@ function renderNewsFeed() {
   if (!feed) return;
   if (!state.newsKeywords.length) { feed.innerHTML = ''; return; }
 
+  const anyTranslationLimited = !state.settings.newsApiKey && state.newsKeywords.some(k => {
+    const c = state.newsCache[k];
+    return isFreshNewsCache(c) && c.translationLimited;
+  });
+  const translationLimitedBanner = anyTranslationLimited
+    ? `<p class="text-[10px] text-muted text-center py-1.5 px-2">⚠️ 오늘의 무료 번역 한도가 소진돼 일부 기사가 원문(영어)으로 보일 수 있어요. 설정에서 뉴스 API 키를 등록하면 언제나 자동 번역까지 받을 수 있어요.</p>`
+    : '';
+
   if (newsViewMode === 'all') {
     const merged = [];
     const seen = new Set();
@@ -1896,6 +1905,7 @@ function renderNewsFeed() {
     merged.sort((a,b) => Date.parse(b.publishedAt||0) - Date.parse(a.publishedAt||0));
     const top = merged.slice(0, 10);
     feed.innerHTML = `
+      ${translationLimitedBanner}
       ${top.length ? top.map(a=>newsCardHtml(a,true)).join('') : (anyLoading ? `<p class="text-xs text-muted text-center py-6"><span class="inline-block spin">⏳</span> 최신 뉴스를 불러오는 중...</p>` : `<p class="text-xs text-muted text-center py-6">최근 3일 내 관련 뉴스가 없습니다.</p>`)}
       ${anyLoading && top.length ? `<p class="text-[10px] text-muted text-center">일부 키워드는 아직 갱신 중이에요...</p>` : ''}
       ${anyError ? `<p class="text-[10px] text-bad text-center">일부 키워드 뉴스를 불러오지 못했어요. 키워드별 보기에서 확인해보세요.</p>` : ''}
@@ -1927,7 +1937,7 @@ function renderNewsFeed() {
           ${expanded ? `<div class="px-3.5 pb-3.5">${bodyHtml}</div>` : ''}
         </div>
       `;
-    }).join('');
+    }).join('') + translationLimitedBanner;
     feed.querySelectorAll('[data-togglekw]').forEach(b => b.onclick = () => {
       const k = b.dataset.togglekw;
       if (expandedNewsKeywords.has(k)) expandedNewsKeywords.delete(k); else expandedNewsKeywords.add(k);
