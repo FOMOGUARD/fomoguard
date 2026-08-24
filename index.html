@@ -131,9 +131,9 @@ tailwind.config = {
 
 <div id="welcome-overlay" class="fixed inset-0 z-[90] hidden bg-[#05070c] px-6 items-center justify-center">
   <div class="w-full max-w-[380px] text-center">
-    <img src="/mascot/pose-wave.png" alt="투자워워 캐릭터가 인사하고 있어요" class="w-36 mx-auto mb-1" style="filter: drop-shadow(0 16px 28px rgba(49,130,246,0.28))">
+    <img id="welcome-mascot-img" src="/mascot/pose-wave.png" alt="투자워워 캐릭터 워니가 인사하고 있어요" class="w-36 mx-auto mb-1" style="filter: drop-shadow(0 16px 28px rgba(49,130,246,0.28))">
     <h1 class="font-extrabold text-2xl mt-3">투자워워</h1>
-    <p class="text-sm text-muted mt-1 mb-10">워워, 진정하고 원칙대로. 쉽고 편하게, 나만의 투자 집사</p>
+    <p class="text-sm text-muted mt-1 mb-10">워워, 진정하고 원칙대로<br>나만의 AI 투자 집사</p>
     <div id="welcome-google-wrap" class="mb-3 flex justify-center"></div>
     <button id="welcome-skip" class="text-xs text-muted underline underline-offset-2 mt-3">나중에 할게요, 그냥 둘러볼래요 →</button>
   </div>
@@ -526,9 +526,16 @@ function hideWelcomeOverlay() {
   ov.classList.add('hidden'); ov.classList.remove('flex');
   localStorage.setItem('fomoguard_onboarded', '1');
 }
+// 첫 화면에 노출할 워니 이미지 - 방문할 때마다 무작위로 하나를 보여준다.
+const WELCOME_MASCOT_IMAGES = ['/mascot/welcome-1.png', '/mascot/welcome-2.png', '/mascot/welcome-3.png', '/mascot/welcome-4.png'];
 function showWelcomeOverlay() {
   const ov = document.getElementById('welcome-overlay');
   ov.classList.remove('hidden'); ov.classList.add('flex');
+  const img = document.getElementById('welcome-mascot-img');
+  if (img) {
+    img.onerror = () => { img.onerror = null; img.src = '/mascot/pose-wave.png'; };
+    img.src = WELCOME_MASCOT_IMAGES[Math.floor(Math.random() * WELCOME_MASCOT_IMAGES.length)];
+  }
   renderGoogleButton('welcome-google-wrap');
 }
 function logout() {
