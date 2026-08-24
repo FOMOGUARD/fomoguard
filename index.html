@@ -166,7 +166,7 @@ tailwind.config = {
         <button id="btn-back" class="hidden w-8 h-8 -ml-1.5 mr-0.5 rounded-full items-center justify-center text-xl text-[#c6cbd9] flex-shrink-0">←</button>
         <button id="btn-home" class="flex items-center gap-2 min-w-0">
           <img id="header-logo-img" src="/mascot/logo-icecube.png" alt="투자워워 로고" class="w-10 h-10 object-contain flex-shrink-0">
-          <span class="font-extrabold text-xl leading-none tracking-tight truncate">투자워워</span>
+          <span class="font-extrabold text-xl leading-none tracking-tight truncate text-[#eef1f7]">투자워워</span>
         </button>
       </div>
       <button id="btn-profile" class="flex flex-col items-end flex-shrink-0 min-w-0 text-right"></button>
@@ -512,7 +512,7 @@ function renderHeaderProfile() {
     const gs = computeGrowthStatus();
     profileBtn.innerHTML = `
       <span class="text-[11px] font-bold text-brand leading-none inline-flex items-center gap-1"><img src="/mascot/${rankMascotPath(gs.level, gs.track)}" alt="" class="w-3.5 h-3.5 object-contain flex-shrink-0">Lv.${gs.level} ${escapeHtml(gs.title)}</span>
-      <span class="text-[11px] leading-none mt-1">${escapeHtml(state.profile.name)}님, <span class="text-brand font-semibold">오늘도 원칙대로 🧊</span></span>
+      <span class="text-[11px] text-[#eef1f7] leading-none mt-1">${escapeHtml(state.profile.name)}님, <span class="text-brand font-semibold">오늘도 원칙대로 🧊</span></span>
     `;
   } else {
     profileBtn.innerHTML = `<span class="text-[11px] text-muted leading-none">쉽고 편하게, 나만의 투자 집사</span>`;
