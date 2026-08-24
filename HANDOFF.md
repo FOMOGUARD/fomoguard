@@ -22,6 +22,7 @@
   - `GEMINI_SHARED_KEY` — 무료 AI 티어용 공유 Gemini API 키
   - `SUPABASE_URL`, `SUPABASE_ANON_KEY` — `/ai-free`에서 사용자 로그인 세션 검증용 (index.html에도 동일 값이 하드코딩되어 있음, anon key라 공개되어도 무방)
   - `NEWSDATA_SHARED_KEY`, `CURRENTS_SHARED_KEY` — 등록 완료·배포 서버에서 정상 작동 확인됨(2026-08-24). `/news-free`(GNews 키 없는 사용자용 기본 뉴스 경로)가 사용.
+  - `SUPABASE_SERVICE_ROLE_KEY` — **⚠️ 아직 미등록.** `/delete-account`(회원탈퇴)가 사용하는 관리자 권한 키. Supabase 대시보드 → Settings → API → "service_role secret" 복사해서 등록 필요. **주의: 이 키는 RLS를 완전히 우회하는 최고 권한 키라 클라이언트 코드(index.html)에는 절대 넣으면 안 되고, Cloudflare 환경변수로만 등록할 것.** 없으면 회원탈퇴 버튼을 눌러도 "서버에 회원탈퇴 설정이 아직 안 되어 있습니다" 에러만 반환하고 계정은 안전하게 유지됨(앱 자체는 안 깨짐).
   - `/price-free`(시세, Yahoo Finance 기반)는 키가 필요 없음 — 별도 환경변수 등록 불필요.
 
 ## 3. 백엔드 / 데이터
@@ -43,6 +44,12 @@
 2. **세션 3에서 다른 컴퓨터가 푸시한 커밋 학습·검증**: `git pull`로 반영된 세션 3의 마지막 두 커밋(HANDOFF.md 갱신 + 트리맵 누적/오늘변화 토글·섹션 설명 아이콘·포트폴리오 인라인 전일대비·매수매도 색상 수정 커밋)을 diff로 정확히 파악하고, 실제 배포 서버에서 트리맵 토글 전환·포트폴리오 인라인 표시가 정상 작동하는 것까지 직접 확인함.
 3. `NEWSDATA_SHARED_KEY`/`CURRENTS_SHARED_KEY` Cloudflare 환경변수 등록 완료 및 실제 배포 서버에서 정상 작동 확인(위 3번 섹션 갱신 반영).
 4. **`supabase-growth.sql` 실행 여부 확인**: 대시보드 로그인 없이도, `SUPABASE_ANON_KEY`로 growth RPC(예: `grant_login_xp`)를 인증 없이 직접 호출해보면 알 수 있음 — 테이블/함수가 없으면 "Could not find the function" 류의 404가 오고, 있으면 `user_id` NOT NULL 위반 같은 정상적인 DB 에러가 옴(비로그인 호출이라 막히는 게 정상이므로 이 에러가 곧 "실행됨"의 증거). 실제로 호출해서 후자를 확인 → 실행 완료로 판정함.
+5. **사용자 리포트 5건 진단·수정**:
+   - 로그인 세션이 로그아웃 전까지 유지되는 건 Supabase 세션 영속성 표준 동작(정상) — 코드 변경 없음.
+   - "총 손익금액"에 실현손익(매도 익절/손절)이 이미 포함돼 있음을 `computeTotalPnl()`로 확인 — 변경 없음.
+   - AI 데일리 분석 "로그인 확인에 실패했습니다" 오류: `increment_ai_usage` RPC 자체는 정상 배포돼 있음을 서버에 직접 확인했지만, `/ai-free`가 캡 초과 외의 모든 RPC 실패를 이 문구 하나로 뭉뚱그려서 진짜 원인을 알 수 없었음 → Supabase가 반환한 실제 오류 텍스트를 그대로 노출하도록 수정(다음에 재현되면 진짜 원인이 바로 보임).
+   - 무료 뉴스 "최근 3일 내 뉴스 없음": `NEWS_CACHE_VERSION`이 뉴스 소스를 여러 번 갈아엎는 동안(GNews RSS 시도 → NewsData/Currents) 한 번도 안 올라가서, 예전에 캐시된 빈 결과가 "오늘 캐시라 최신"으로 취급되며 재조회가 막혀있었음 → 버전 2→3으로 올려 예전 캐시 전부 무효화.
+   - "데이터 초기화"는 회원탈퇴가 아님(로컬+클라우드 데이터만 삭제, 계정은 유지) 확인. 기존엔 로그아웃을 안 시켜서 세션이 남아있으면 포커스 복귀 시 클라우드 데이터가 도로 채워지는 버그가 있어 수정(초기화 시 빈 상태를 클라우드에 push 후 로그아웃까지 시킴). **신규로 진짜 회원탈퇴 기능 추가**: `/delete-account` — `SUPABASE_SERVICE_ROLE_KEY`로 `fomoguard_data`/`fomoguard_growth`/`fomoguard_ai_usage` 전 테이블 데이터 + Supabase Auth 계정 자체를 서버에서 영구 삭제. 클라이언트는 본인의 로그인 토큰으로만 호출 가능(서버가 토큰으로 실제 사용자를 재확인, 클라이언트가 보낸 id는 신뢰 안 함). **`SUPABASE_SERVICE_ROLE_KEY` 미등록 상태라 아직 실제로 작동 안 함** — 위 2번 섹션 참고해서 등록 필요.
 
 ### 세션 3 — 2026-08-21~22, 다른 컴퓨터
 
@@ -96,6 +103,7 @@
 
 - ~~`supabase-growth.sql` 실행~~ — 2026-08-24 실행 완료 확인함(익명 키로 RPC 직접 호출해서 테이블·함수 존재 검증).
 - ~~Cloudflare에 `NEWSDATA_SHARED_KEY`, `CURRENTS_SHARED_KEY` 환경변수 등록~~ — 2026-08-24 완료, 배포 서버에서 정상 작동 확인함.
+- **⚠️ 우선순위 높음 — Cloudflare에 `SUPABASE_SERVICE_ROLE_KEY` 환경변수 등록**: 회원탈퇴(`/delete-account`) 기능이 이 키가 있어야 실제로 계정을 삭제할 수 있음. Supabase 대시보드 → Settings → API → "service_role secret". 없으면 회원탈퇴 버튼을 눌러도 에러만 반환하고 앱은 안전함(계정 삭제 안 됨).
 - 브랜드 컬러(#1E8FFF 아이스블루)·로고(각얼음 모티브)·캐릭터명("워니") 1차 컨셉 논의는 끝났지만 **아직 실제 코드에 적용 안 됨** — 사용자가 다른 AI로 최종 로고 아트를 뽑아온 뒤 적용하기로 함. 지금 코드는 여전히 기존 브랜드 컬러(#3182f6, 토스블루와 동일) 그대로임.
 - 서비스명 최종 확정 → 전체 치환 + 도메인/GitHub repo 이름도 바꿀지 결정
 - 엄지척 표정 마스코트 받으면 실적 달성 등 긍정 상황에 배치 (여전히 미확보)
