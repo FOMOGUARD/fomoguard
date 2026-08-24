@@ -1587,32 +1587,50 @@ async function fetchFxRate() {
 }
 async function syncStockPrices() {
   const key = state.settings.twelveDataKey;
-  if (!key) return { ok:0, fail:0, skipped:true };
   const withTicker = state.portfolio.filter(h=>h.ticker);
   if (!withTicker.length) return { ok:0, fail:0, skipped:false };
-  const groups = {};
-  withTicker.forEach(h => { const ex = h.exchange||''; (groups[ex]=groups[ex]||[]).push(h); });
   let ok=0, fail=0;
-  for (const ex of Object.keys(groups)) {
-    const hs = groups[ex];
-    const symbols = [...new Set(hs.map(h=>h.ticker))].join(',');
-    let url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(symbols)}&apikey=${encodeURIComponent(key)}`;
-    if (ex) url += `&exchange=${encodeURIComponent(ex)}`;
-    try {
-      const res = await fetch(url);
-      const data = await res.json();
-      hs.forEach(h => {
-        let priceStr, pctStr;
-        if (data.close !== undefined) { priceStr = data.close; pctStr = data.percent_change; }
-        else if (data[h.ticker] && data[h.ticker].close !== undefined) { priceStr = data[h.ticker].close; pctStr = data[h.ticker].percent_change; }
-        if (priceStr && !isNaN(+priceStr)) {
-          h.currentPrice = +priceStr; h.priceUpdatedAt = Date.now();
-          h.dailyChangePct = (pctStr!==undefined && !isNaN(+pctStr)) ? +pctStr : undefined;
-          ok++;
-        } else fail++;
-      });
-    } catch(e) { fail += hs.length; }
-    await new Promise(r=>setTimeout(r, 800));
+  if (key) {
+    // Twelve Data 키가 있으면 거래소별로 종목을 묶어 한 번에 조회(호출 횟수 절약).
+    const groups = {};
+    withTicker.forEach(h => { const ex = h.exchange||''; (groups[ex]=groups[ex]||[]).push(h); });
+    for (const ex of Object.keys(groups)) {
+      const hs = groups[ex];
+      const symbols = [...new Set(hs.map(h=>h.ticker))].join(',');
+      let url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(symbols)}&apikey=${encodeURIComponent(key)}`;
+      if (ex) url += `&exchange=${encodeURIComponent(ex)}`;
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        hs.forEach(h => {
+          let priceStr, pctStr;
+          if (data.close !== undefined) { priceStr = data.close; pctStr = data.percent_change; }
+          else if (data[h.ticker] && data[h.ticker].close !== undefined) { priceStr = data[h.ticker].close; pctStr = data[h.ticker].percent_change; }
+          if (priceStr && !isNaN(+priceStr)) {
+            h.currentPrice = +priceStr; h.priceUpdatedAt = Date.now();
+            h.dailyChangePct = (pctStr!==undefined && !isNaN(+pctStr)) ? +pctStr : undefined;
+            ok++;
+          } else fail++;
+        });
+      } catch(e) { fail += hs.length; }
+      await new Promise(r=>setTimeout(r, 800));
+    }
+  } else {
+    // 키가 없으면 /price-free(Yahoo Finance 기반, 키 불필요)로 종목별 시세+전일대비를 조회.
+    const seen = {};
+    for (const h of withTicker) {
+      const cacheKey = `${h.ticker}|${h.exchange||''}`;
+      if (!(cacheKey in seen)) {
+        seen[cacheKey] = await fetchLivePrice(h.ticker, h.exchange);
+        await new Promise(r=>setTimeout(r, 300));
+      }
+      const result = seen[cacheKey];
+      if (result) {
+        h.currentPrice = result.price; h.priceUpdatedAt = Date.now();
+        h.dailyChangePct = result.changePct;
+        ok++;
+      } else fail++;
+    }
   }
   save(LS.portfolio, state.portfolio);
   return { ok, fail, skipped:false };
@@ -1683,7 +1701,7 @@ async function refreshMarketData(showToast) {
   snapshotToday();
   localStorage.setItem('fomoguard_last_sync_date', todayStr());
   if (showToast) {
-    if (priceResult.skipped) toast(fxOk ? '환율·지수를 갱신했습니다. (Twelve Data 키가 없어 보유 종목 시세는 갱신하지 않았습니다. 설정에서 키를 등록하면 자동 갱신돼요)' : '갱신에 실패했습니다.', fxOk?'info':'error');
+    if (priceResult.ok === 0 && priceResult.fail === 0) toast(fxOk ? '환율·지수를 갱신했습니다.' : '갱신에 실패했습니다.', fxOk?'info':'error');
     else toast(`갱신 완료 (시세 성공 ${priceResult.ok} · 실패 ${priceResult.fail})`, priceResult.fail?'warn':'success');
   }
   if (renderers[currentTab]) renderers[currentTab]();
