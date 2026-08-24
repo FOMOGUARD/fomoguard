@@ -45,7 +45,9 @@ export async function onRequestPost(context) {
     if (errText.includes('AI_DAILY_CAP_EXCEEDED')) {
       return json(429, { error: `무료 AI 사용 한도(하루 ${DAILY_CAP}회)를 모두 사용했습니다. 내일 다시 이용하거나, 설정에서 본인 API 키를 등록하면 무제한으로 쓸 수 있어요.` });
     }
-    return json(401, { error: '로그인 확인에 실패했습니다. 다시 로그인해주세요.' });
+    // 인증 만료뿐 아니라 서버 설정 문제 등 다른 원인일 수도 있어서, 실제 오류를 그대로 보여준다
+    // (진단 편의를 위함 - Postgres/PostgREST 오류 메시지에는 개인정보가 포함되지 않음).
+    return json(rpcRes.status === 401 ? 401 : 502, { error: `사용량 확인 실패 (${rpcRes.status}): ${errText.slice(0, 200)}` });
   }
 
   let geminiRes;

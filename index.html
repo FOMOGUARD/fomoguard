@@ -1730,7 +1730,7 @@ async function generateDailyAnalysis(silent) {
    서버 프록시(/news-proxy, Cloudflare Pages Functions)를 거쳐 호출한다.
    프록시는 한글 키워드일 경우 영문으로 번역해 해외 뉴스까지 함께 검색하고,
    비한국어 기사는 제목·요약을 한국어로 번역해서 돌려준다. */
-const NEWS_CACHE_VERSION = 2;
+const NEWS_CACHE_VERSION = 3;
 const NEWS_POSITIVE_WORDS = ['급등','상승','신고가','사상 최고','최고치','호실적','실적 개선','실적 호조','흑자','흑자전환','수주','대박','성장세','성장','돌파','반등','강세','기대감','호재','확장','증가','인수 완료','깜짝 실적','최대 실적','목표가 상향','매수 의견','투자 확대','수출 호조','훈풍','청신호','순항','회복세','도약','surge','soar','rally','record high','beats expectations','beat estimates','profit','growth','upgrade','jump','rebound','outperform','boost','breakthrough','all-time high','soars','climbs','gains','strong demand','expansion'];
 const NEWS_NEGATIVE_WORDS = ['급락','폭락','하락','적자','손실','리콜','소송','조사','제재','파산','감원','구조조정','경고','우려','부진','약세','위기','악재','벌금','규제 강화','목표가 하향','매도 의견','실적 부진','실적 쇼크','충격','타격','급감','철수','중단','논란','비상','최악','내림세','침체','투자 위험','risk','plunge','slump','crash','loss','lawsuit','recall','investigation','sanction','bankruptcy','layoff','warning','downgrade','probe','fine','sued','miss expectations','falls','drops','tumbles','slides','cuts jobs','shortage'];
 function classifyNewsSentiment(text) {
@@ -1910,7 +1910,7 @@ function renderNewsFeed() {
       if (expanded) {
         if (newsErrors[k]) bodyHtml = `<p class="text-xs text-bad">뉴스를 불러오지 못했습니다: ${escapeHtml(newsErrors[k])}</p>`;
         else if (!isToday) bodyHtml = `<p class="text-xs text-muted"><span class="inline-block spin">⏳</span> 최신 뉴스를 불러오는 중...</p>`;
-        else if (cached.items.length === 0) bodyHtml = `<p class="text-xs text-muted">최근 3일 내 관련 뉴스가 없습니다.${cached.totalFound ? ` (GNews 전체 검색결과 ${cached.totalFound}건 중 3일 이내 0건)` : ''}</p>`;
+        else if (cached.items.length === 0) bodyHtml = `<p class="text-xs text-muted">최근 3일 내 관련 뉴스가 없습니다.${cached.totalFound ? ` (전체 검색결과 ${cached.totalFound}건 중 3일 이내 0건)` : ''}</p>`;
         else bodyHtml = `<div class="space-y-3">${cached.items.map(a=>newsCardHtml(a,false)).join('')}</div>`;
       }
       return `
@@ -3162,11 +3162,18 @@ renderers.settings = function() {
       <span class="text-muted">›</span>
     </button>
 
-    <div class="card p-4 border border-bad/30">
+    <div class="card p-4 border border-bad/30 mb-4">
       <p class="text-sm font-semibold text-bad mb-1">⚠️ 데이터 초기화</p>
-      <p class="text-xs text-muted mb-3">모든 원칙/포트폴리오/거래내역/일지/기록이 영구히 삭제됩니다.</p>
+      <p class="text-xs text-muted mb-3">모든 원칙/포트폴리오/거래내역/일지/기록이 영구히 삭제됩니다. 계정은 유지되며, 다시 로그인하면 빈 상태로 시작해요.</p>
       <button id="st-reset" class="btn-ghost text-xs px-3 py-2.5 rounded-xl w-full">전체 초기화</button>
     </div>
+
+    ${state.profile ? `
+    <div class="card p-4 border border-bad/30">
+      <p class="text-sm font-semibold text-bad mb-1">🗑️ 회원탈퇴</p>
+      <p class="text-xs text-muted mb-3">계정과 클라우드에 저장된 모든 데이터(원칙/포트폴리오/거래내역/일지/레벨·경험치 포함)가 서버에서 영구히 삭제되며 복구할 수 없습니다.</p>
+      <button id="st-delete-account" class="text-xs px-3 py-2.5 rounded-xl w-full bg-bad/15 text-bad font-bold">계정 완전히 삭제하기</button>
+    </div>` : ''}
   `;
 
   if (state.profile) {
@@ -3260,16 +3267,48 @@ renderers.settings = function() {
     reader.readAsText(file);
   };
   document.getElementById('st-reset').onclick = () => {
-    confirmModal('정말 초기화할까요?', '이 작업은 되돌릴 수 없습니다. 초기화 전 백업을 권장합니다.', () => {
+    confirmModal('정말 초기화할까요?', '이 작업은 되돌릴 수 없습니다. 초기화 전 백업을 권장합니다.', async () => {
       Object.values(LS).forEach(k => k !== LS.settings && localStorage.removeItem(k));
       localStorage.removeItem('fomoguard_last_sync_date');
       localStorage.removeItem('fomoguard_demo_seed');
       state.principles = []; state.portfolio = []; state.journal = []; state.transactions = []; state.factchecks = []; state.snapshots = []; state.cashFlows = [];
-      state.fx = { rate:null, updatedAt:null }; state.marketSnapshot = null; state.dailyAnalysis = null; state.newsKeywords = []; state.newsCache = {}; state.profile = null;
+      state.fx = { rate:null, updatedAt:null }; state.marketSnapshot = null; state.dailyAnalysis = null; state.newsKeywords = []; state.newsCache = {};
+      // 로그인 상태였다면, 비워진 상태를 클라우드에도 반영해야 다음에 다시 로그인했을 때
+      // 예전 데이터가 그대로 복원되지 않는다 (전엔 로컬만 지우고 로그아웃도 안 해서,
+      // 세션이 남아있으면 포커스 복귀 시 클라우드에서 예전 데이터가 도로 채워지는 버그가 있었음).
+      if (currentUser && supabaseClient) {
+        try { await pushToCloud(); } catch (e) {}
+        try { await supabaseClient.auth.signOut(); } catch (e) {}
+      }
+      state.profile = null; currentUser = null;
+      localStorage.removeItem(LS.profile);
       renderHeaderProfile();
       switchTab('dashboard'); toast('모든 데이터를 초기화했습니다.');
     }, '초기화');
   };
+  if (document.getElementById('st-delete-account')) {
+    document.getElementById('st-delete-account').onclick = () => {
+      confirmModal('정말 회원탈퇴할까요?', '계정과 클라우드에 저장된 모든 데이터가 서버에서 영구히 삭제됩니다. 이 작업은 절대 되돌릴 수 없습니다.', async () => {
+        try {
+          const { data: { session } } = await supabaseClient.auth.getSession();
+          const token = session?.access_token;
+          if (!token) throw new Error('로그인 세션이 만료되었어요. 다시 로그인 후 시도해주세요.');
+          const res = await fetch('/delete-account', { method:'POST', headers:{ 'Authorization': `Bearer ${token}` } });
+          const data = await res.json().catch(()=>({}));
+          if (!res.ok) throw new Error(data.error || `삭제 실패 (${res.status})`);
+          Object.values(LS).forEach(k => localStorage.removeItem(k));
+          localStorage.removeItem('fomoguard_last_sync_date');
+          localStorage.removeItem('fomoguard_demo_seed');
+          localStorage.removeItem('fomoguard_onboarded');
+          try { await supabaseClient.auth.signOut(); } catch (e) {}
+          toast('회원탈퇴가 완료됐습니다.', 'success');
+          setTimeout(() => location.reload(), 800);
+        } catch (err) {
+          toast(err.message || '회원탈퇴 중 오류가 발생했습니다.', 'error');
+        }
+      }, '회원탈퇴');
+    };
+  }
 };
 
 /* ================= MORE ================= */

@@ -42,7 +42,7 @@ exports.handler = async (event) => {
     if (errText.includes('AI_DAILY_CAP_EXCEEDED')) {
       return { statusCode: 429, body: JSON.stringify({ error: `무료 AI 사용 한도(하루 ${DAILY_CAP}회)를 모두 사용했습니다. 내일 다시 이용하거나, 설정에서 본인 API 키를 등록하면 무제한으로 쓸 수 있어요.` }) };
     }
-    return { statusCode: 401, body: JSON.stringify({ error: '로그인 확인에 실패했습니다. 다시 로그인해주세요.' }) };
+    return { statusCode: rpcRes.status === 401 ? 401 : 502, body: JSON.stringify({ error: `사용량 확인 실패 (${rpcRes.status}): ${errText.slice(0, 200)}` }) };
   }
 
   let geminiRes;
