@@ -101,6 +101,10 @@ export async function onRequestPost(context) {
     CURRENTS_KEY ? fetchCurrents(query, CURRENTS_KEY) : Promise.resolve([])
   ]);
 
+  if (body.debug) {
+    return json(200, { originalKeyword: keyword, translatedQuery: query, ndCount: ndArticles.length, curCount: curArticles.length });
+  }
+
   const seen = new Set();
   const merged = [];
   for (const a of [...ndArticles, ...curArticles]) {
