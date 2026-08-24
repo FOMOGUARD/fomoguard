@@ -161,17 +161,17 @@ tailwind.config = {
 <div class="app-shell">
 
   <header class="px-5 pt-6 pb-3">
-    <div class="flex items-center gap-1">
-      <button id="btn-back" class="hidden w-8 h-8 -ml-1.5 mr-0.5 rounded-full items-center justify-center text-xl text-[#c6cbd9] flex-shrink-0">←</button>
-      <button id="btn-home" class="flex items-center gap-2 flex-1 text-left min-w-0">
-        <img src="/mascot/face-B.png" alt="" class="w-8 h-8 object-contain flex-shrink-0">
-        <div class="min-w-0">
-          <h1 class="font-extrabold text-lg leading-none tracking-tight">투자워워</h1>
-          <p class="text-[11px] text-muted leading-none mt-1.5">쉽고 편하게, 나만의 투자 집사</p>
-        </div>
-      </button>
-      <button id="btn-level-badge" class="hidden badge bg-brand/15 text-brand font-bold flex-shrink-0 whitespace-nowrap inline-flex items-center gap-1"></button>
+    <div class="flex items-center justify-between gap-2">
+      <div class="flex items-center gap-1 min-w-0">
+        <button id="btn-back" class="hidden w-8 h-8 -ml-1.5 mr-0.5 rounded-full items-center justify-center text-xl text-[#c6cbd9] flex-shrink-0">←</button>
+        <button id="btn-home" class="flex items-center gap-1.5 min-w-0">
+          <img id="header-logo-img" src="/mascot/logo-icecube.png" alt="투자워워 로고" class="w-7 h-7 object-contain flex-shrink-0">
+          <span class="font-extrabold text-base leading-none tracking-tight truncate">투자워워</span>
+        </button>
+      </div>
+      <button id="btn-profile" class="flex items-center gap-2 flex-shrink-0 min-w-0"></button>
     </div>
+    <p id="header-tagline" class="text-[11px] text-right mt-1.5"></p>
   </header>
 
   <main class="px-4 pb-6 flex-1">
@@ -508,18 +508,22 @@ function showWelcomeGreeting(name) {
   toast(msg, 'success');
 }
 function renderHeaderProfile() {
-  const wrap = document.getElementById('btn-home');
-  const badge = document.getElementById('btn-level-badge');
+  const profileBtn = document.getElementById('btn-profile');
+  const tagline = document.getElementById('header-tagline');
   if (state.profile) {
-    wrap.innerHTML = `${state.profile.picture ? `<img src="${escapeHtml(state.profile.picture)}" class="w-8 h-8 rounded-full flex-shrink-0">` : `<img src="/mascot/face-B.png" alt="" class="w-8 h-8 object-contain flex-shrink-0">`}<div class="min-w-0"><h1 class="font-extrabold text-lg leading-none tracking-tight truncate">${escapeHtml(state.profile.name)}님</h1><p class="text-[11px] text-brand leading-none mt-1.5 font-semibold">오늘도 원칙대로 🧊</p></div>`;
     const gs = computeGrowthStatus();
-    badge.innerHTML = `<img src="/mascot/${rankMascotPath(gs.level, gs.track)}" alt="" class="w-4 h-4 object-contain flex-shrink-0">Lv.${gs.level} ${escapeHtml(gs.title)}`;
-    badge.classList.remove('hidden');
+    profileBtn.innerHTML = `
+      <span class="badge bg-brand/15 text-brand font-bold whitespace-nowrap inline-flex items-center gap-1"><img src="/mascot/${rankMascotPath(gs.level, gs.track)}" alt="" class="w-4 h-4 object-contain flex-shrink-0">Lv.${gs.level} ${escapeHtml(gs.title)}</span>
+      ${state.profile.picture ? `<img src="${escapeHtml(state.profile.picture)}" class="w-8 h-8 rounded-full flex-shrink-0">` : `<img src="/mascot/face-B.png" alt="" class="w-8 h-8 object-contain flex-shrink-0">`}
+    `;
+    tagline.innerHTML = `${escapeHtml(state.profile.name)}님, <span class="text-brand font-semibold">오늘도 원칙대로 🧊</span>`;
+    tagline.classList.remove('text-muted');
   } else {
-    wrap.innerHTML = `<img src="/mascot/face-B.png" alt="" class="w-8 h-8 object-contain flex-shrink-0"><div><h1 class="font-extrabold text-lg leading-none tracking-tight">투자워워</h1><p class="text-[11px] text-muted leading-none mt-1.5">쉽고 편하게, 나만의 투자 집사</p></div>`;
-    badge.classList.add('hidden');
+    profileBtn.innerHTML = '';
+    tagline.textContent = '쉽고 편하게, 나만의 투자 집사';
+    tagline.classList.add('text-muted');
   }
-  badge.onclick = () => switchTab('growth');
+  profileBtn.onclick = () => switchTab('growth');
 }
 function hideWelcomeOverlay() {
   const ov = document.getElementById('welcome-overlay');
@@ -527,7 +531,7 @@ function hideWelcomeOverlay() {
   localStorage.setItem('fomoguard_onboarded', '1');
 }
 // 첫 화면에 노출할 워니 이미지 - 방문할 때마다 무작위로 하나를 보여준다.
-const WELCOME_MASCOT_IMAGES = ['/mascot/welcome-1.png', '/mascot/welcome-2.png', '/mascot/welcome-3.png', '/mascot/welcome-4.png'];
+const WELCOME_MASCOT_IMAGES = ['/mascot/welcome-1.png', '/mascot/welcome-2.png', '/mascot/welcome-3.png', '/mascot/welcome-4.png', '/mascot/welcome-5.png'];
 function showWelcomeOverlay() {
   const ov = document.getElementById('welcome-overlay');
   ov.classList.remove('hidden'); ov.classList.add('flex');
@@ -839,6 +843,10 @@ function goHome() {
 }
 document.getElementById('btn-back').addEventListener('click', goBack);
 document.getElementById('btn-home').addEventListener('click', goHome);
+(() => {
+  const logoImg = document.getElementById('header-logo-img');
+  logoImg.onerror = () => { logoImg.replaceWith(Object.assign(document.createElement('span'), { textContent: '🧊', className: 'text-xl leading-none flex-shrink-0' })); };
+})();
 
 /* ---------------- modal ---------------- */
 function openModal(title, bodyHtml, footerHtml='') {
