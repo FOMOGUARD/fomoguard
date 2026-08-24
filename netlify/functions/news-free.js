@@ -24,7 +24,7 @@ async function translateOneWithMyMemory(text, sourceLang, targetLang) {
   if (!text || !text.trim()) return null;
   const q = text.replace(/\n/g, ' ').slice(0, 480);
   try {
-    const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(q)}&langpair=${sourceLang}|${targetLang}`);
+    const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(q)}&langpair=${sourceLang}|${targetLang}&de=noreply@investwowo.app`);
     if (!res.ok) return null;
     const data = await res.json();
     if (data.quotaFinished) return null;
