@@ -119,7 +119,7 @@ exports.handler = async (event) => {
     merged.push(a);
   }
   merged.sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0));
-  const top = merged.slice(0, 15);
+  const top = merged.slice(0, 10);
 
   const needsTranslation = top.filter(a => !hasKorean(a.title));
   if (needsTranslation.length) {
