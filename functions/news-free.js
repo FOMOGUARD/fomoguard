@@ -6,17 +6,21 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 // 구글 번역 공개 엔드포인트가 짧은 순간 여러 번 호출되면 간헐적으로 429를 반환해서,
 // 짧은 지연을 두고 최대 2번 재시도한다.
-async function translateText(text, target) {
+async function translateText(text, target, dbg) {
   if (!text) return text;
   const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${target}&dt=t&q=${encodeURIComponent(text)}`;
   for (let attempt = 0; attempt <= 2; attempt++) {
     if (attempt > 0) await sleep(300 * attempt);
     try {
       const res = await fetch(url);
+      const bodyText = await res.text();
+      if (dbg) dbg.push({ attempt, status: res.status, bodyPreview: bodyText.slice(0, 150) });
       if (!res.ok) continue;
-      const data = await res.json();
+      const data = JSON.parse(bodyText);
       return (data[0] || []).map(seg => seg[0]).join('') || text;
-    } catch (e) {}
+    } catch (e) {
+      if (dbg) dbg.push({ attempt, error: String(e) });
+    }
   }
   return text;
 }
@@ -94,7 +98,8 @@ export async function onRequestPost(context) {
   const { keyword } = body;
   if (!keyword) return json(400, { error: '검색 키워드가 없습니다.' });
 
-  const query = hasKorean(keyword) ? await translateText(keyword, 'en') : keyword;
+  const tdbg = [];
+  const query = hasKorean(keyword) ? await translateText(keyword, 'en', tdbg) : keyword;
 
   const [ndArticles, curArticles] = await Promise.all([
     NEWSDATA_KEY ? fetchNewsData(query, NEWSDATA_KEY) : Promise.resolve([]),
@@ -102,7 +107,7 @@ export async function onRequestPost(context) {
   ]);
 
   if (body.debug) {
-    return json(200, { originalKeyword: keyword, translatedQuery: query, ndCount: ndArticles.length, curCount: curArticles.length });
+    return json(200, { originalKeyword: keyword, translatedQuery: query, ndCount: ndArticles.length, curCount: curArticles.length, translateAttempts: tdbg });
   }
 
   const seen = new Set();
