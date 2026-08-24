@@ -7,7 +7,7 @@ const hasKorean = (s) => /[가-힣]/.test(s || '');
 // 누적 사용량 기준으로 막아버리는 경우가 있어(실측: "Sorry..." 봇 차단 페이지, 429),
 // 이미 안정적으로 쓰고 있는 정식 키 기반 Gemini API로 번역을 대체한다.
 // 기사 여러 건을 한 번에 배치 번역해서 호출 횟수도 최소화한다.
-async function translateBatchWithGemini(items, targetLang, geminiKey) {
+async function translateBatchWithGemini(items, targetLang, geminiKey, debugInfo) {
   if (!geminiKey || !items.length) return items;
   const nonEmpty = items.some(t => (t || '').trim());
   if (!nonEmpty) return items;
@@ -19,8 +19,11 @@ async function translateBatchWithGemini(items, targetLang, geminiKey) {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 4000 } })
     });
+    const raw = await res.text();
+    if (debugInfo) debugInfo.gemini = debugInfo.gemini || [];
+    if (debugInfo) debugInfo.gemini.push({ targetLang, itemCount: items.length, status: res.status, body: raw.slice(0, 800) });
     if (!res.ok) return items;
-    const data = await res.json();
+    const data = JSON.parse(raw);
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     if (!text) return items;
     const result = items.slice();
@@ -32,6 +35,7 @@ async function translateBatchWithGemini(items, targetLang, geminiKey) {
     }
     return result;
   } catch (e) {
+    if (debugInfo) { debugInfo.gemini = debugInfo.gemini || []; debugInfo.gemini.push({ targetLang, error: String(e) }); }
     return items;
   }
 }
@@ -119,7 +123,7 @@ export async function onRequestPost(context) {
 
   let query = keyword;
   if (hasKorean(keyword)) {
-    const [translated] = await translateBatchWithGemini([keyword], 'en', GEMINI_KEY);
+    const [translated] = await translateBatchWithGemini([keyword], 'en', GEMINI_KEY, debugInfo);
     query = translated || keyword;
   }
   if (debugInfo) debugInfo.query = query;

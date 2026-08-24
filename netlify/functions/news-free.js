@@ -1,6 +1,6 @@
 const hasKorean = (s) => /[가-힣]/.test(s || '');
 
-async function translateBatchWithGemini(items, targetLang, geminiKey) {
+async function translateBatchWithGemini(items, targetLang, geminiKey, debugInfo) {
   if (!geminiKey || !items.length) return items;
   const nonEmpty = items.some(t => (t || '').trim());
   if (!nonEmpty) return items;
@@ -12,8 +12,11 @@ async function translateBatchWithGemini(items, targetLang, geminiKey) {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 4000 } })
     });
+    const raw = await res.text();
+    if (debugInfo) debugInfo.gemini = debugInfo.gemini || [];
+    if (debugInfo) debugInfo.gemini.push({ targetLang, itemCount: items.length, status: res.status, body: raw.slice(0, 800) });
     if (!res.ok) return items;
-    const data = await res.json();
+    const data = JSON.parse(raw);
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     if (!text) return items;
     const result = items.slice();
@@ -25,6 +28,7 @@ async function translateBatchWithGemini(items, targetLang, geminiKey) {
     }
     return result;
   } catch (e) {
+    if (debugInfo) { debugInfo.gemini = debugInfo.gemini || []; debugInfo.gemini.push({ targetLang, error: String(e) }); }
     return items;
   }
 }
@@ -109,7 +113,7 @@ exports.handler = async (event) => {
 
   let query = keyword;
   if (hasKorean(keyword)) {
-    const [translated] = await translateBatchWithGemini([keyword], 'en', GEMINI_KEY);
+    const [translated] = await translateBatchWithGemini([keyword], 'en', GEMINI_KEY, debugInfo);
     query = translated || keyword;
   }
   if (debugInfo) debugInfo.query = query;
