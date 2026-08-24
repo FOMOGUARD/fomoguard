@@ -1730,7 +1730,7 @@ async function generateDailyAnalysis(silent) {
    서버 프록시(/news-proxy, Cloudflare Pages Functions)를 거쳐 호출한다.
    프록시는 한글 키워드일 경우 영문으로 번역해 해외 뉴스까지 함께 검색하고,
    비한국어 기사는 제목·요약을 한국어로 번역해서 돌려준다. */
-const NEWS_CACHE_VERSION = 3;
+const NEWS_CACHE_VERSION = 4;
 const NEWS_POSITIVE_WORDS = ['급등','상승','신고가','사상 최고','최고치','호실적','실적 개선','실적 호조','흑자','흑자전환','수주','대박','성장세','성장','돌파','반등','강세','기대감','호재','확장','증가','인수 완료','깜짝 실적','최대 실적','목표가 상향','매수 의견','투자 확대','수출 호조','훈풍','청신호','순항','회복세','도약','surge','soar','rally','record high','beats expectations','beat estimates','profit','growth','upgrade','jump','rebound','outperform','boost','breakthrough','all-time high','soars','climbs','gains','strong demand','expansion'];
 const NEWS_NEGATIVE_WORDS = ['급락','폭락','하락','적자','손실','리콜','소송','조사','제재','파산','감원','구조조정','경고','우려','부진','약세','위기','악재','벌금','규제 강화','목표가 하향','매도 의견','실적 부진','실적 쇼크','충격','타격','급감','철수','중단','논란','비상','최악','내림세','침체','투자 위험','risk','plunge','slump','crash','loss','lawsuit','recall','investigation','sanction','bankruptcy','layoff','warning','downgrade','probe','fine','sued','miss expectations','falls','drops','tumbles','slides','cuts jobs','shortage'];
 function classifyNewsSentiment(text) {
@@ -1779,7 +1779,7 @@ async function fetchNewsForKeywordFree(keyword) {
   if (!Array.isArray(data.articles)) throw new Error('뉴스 응답 형식이 예상과 다릅니다.');
   return {
     totalFound: data.totalArticles ?? data.articles.length,
-    articles: data.articles.map(a => ({ title:a.title||'', url:a.url||'#', source:a.source||'', publishedAt:a.publishedAt||'', description:a.description||'', translated:false }))
+    articles: data.articles.map(a => ({ title:a.title||'', url:a.url||'#', source:a.source||'', publishedAt:a.publishedAt||'', description:a.description||'', translated:!!a.translated }))
   };
 }
 // 이미 본인 GNews 키를 등록한 계정은 그대로 GNews(유료) 경로를 쓰고,
