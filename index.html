@@ -1598,52 +1598,28 @@ async function fetchFxRate() {
   } catch(e) {}
   return false;
 }
+// 종목별로 fetchLivePrice()를 써서 시세+전일대비를 갱신한다. fetchLivePrice 자체가
+// "Twelve Data 키 있으면 우선 시도 -> 실패하면(키 없음/키 오류/일시 오류 등 무엇이든) /price-free로 대체"
+// 로직을 이미 갖고 있어서, 여기서 키 유무로 분기하지 않고 항상 이 함수 하나로 통일한다.
+// (예전엔 키가 있을 때 Twelve Data 배치 호출만 쓰고 실패시 대체 경로가 없어서, 키가 유효하지
+// 않거나 일시적으로 오류가 나면 전 종목이 통째로 갱신 실패하는 버그가 있었음)
 async function syncStockPrices() {
-  const key = state.settings.twelveDataKey;
   const withTicker = state.portfolio.filter(h=>h.ticker);
   if (!withTicker.length) return { ok:0, fail:0, skipped:false };
   let ok=0, fail=0;
-  if (key) {
-    // Twelve Data 키가 있으면 거래소별로 종목을 묶어 한 번에 조회(호출 횟수 절약).
-    const groups = {};
-    withTicker.forEach(h => { const ex = h.exchange||''; (groups[ex]=groups[ex]||[]).push(h); });
-    for (const ex of Object.keys(groups)) {
-      const hs = groups[ex];
-      const symbols = [...new Set(hs.map(h=>h.ticker))].join(',');
-      let url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(symbols)}&apikey=${encodeURIComponent(key)}`;
-      if (ex) url += `&exchange=${encodeURIComponent(ex)}`;
-      try {
-        const res = await fetch(url);
-        const data = await res.json();
-        hs.forEach(h => {
-          let priceStr, pctStr;
-          if (data.close !== undefined) { priceStr = data.close; pctStr = data.percent_change; }
-          else if (data[h.ticker] && data[h.ticker].close !== undefined) { priceStr = data[h.ticker].close; pctStr = data[h.ticker].percent_change; }
-          if (priceStr && !isNaN(+priceStr)) {
-            h.currentPrice = +priceStr; h.priceUpdatedAt = Date.now();
-            h.dailyChangePct = (pctStr!==undefined && !isNaN(+pctStr)) ? +pctStr : undefined;
-            ok++;
-          } else fail++;
-        });
-      } catch(e) { fail += hs.length; }
-      await new Promise(r=>setTimeout(r, 800));
+  const seen = {};
+  for (const h of withTicker) {
+    const cacheKey = `${h.ticker}|${h.exchange||''}`;
+    if (!(cacheKey in seen)) {
+      seen[cacheKey] = await fetchLivePrice(h.ticker, h.exchange);
+      await new Promise(r=>setTimeout(r, 300));
     }
-  } else {
-    // 키가 없으면 /price-free(Yahoo Finance 기반, 키 불필요)로 종목별 시세+전일대비를 조회.
-    const seen = {};
-    for (const h of withTicker) {
-      const cacheKey = `${h.ticker}|${h.exchange||''}`;
-      if (!(cacheKey in seen)) {
-        seen[cacheKey] = await fetchLivePrice(h.ticker, h.exchange);
-        await new Promise(r=>setTimeout(r, 300));
-      }
-      const result = seen[cacheKey];
-      if (result) {
-        h.currentPrice = result.price; h.priceUpdatedAt = Date.now();
-        h.dailyChangePct = result.changePct;
-        ok++;
-      } else fail++;
-    }
+    const result = seen[cacheKey];
+    if (result) {
+      h.currentPrice = result.price; h.priceUpdatedAt = Date.now();
+      h.dailyChangePct = result.changePct;
+      ok++;
+    } else fail++;
   }
   save(LS.portfolio, state.portfolio);
   return { ok, fail, skipped:false };
