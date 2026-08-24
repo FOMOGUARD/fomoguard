@@ -24,18 +24,21 @@ function dictLookup(keyword) {
 // MyMemory Translation API - 키 없이 쓸 수 있고 무료 일일 한도가 넉넉함(익명 5,000단어/일).
 // GEMINI_SHARED_KEY(무료 티어 하루 20건)와 완전히 분리된 자원이라, 번역을 여기로 1차 처리하면
 // AI 데일리 분석과 쿼터를 다툴 일이 없다. 배치 API가 없어서 건별로 병렬 호출한다.
-async function translateOneWithMyMemory(text, sourceLang, targetLang) {
+async function translateOneWithMyMemory(text, sourceLang, targetLang, debugInfo) {
   if (!text || !text.trim()) return null;
   const q = text.replace(/\n/g, ' ').slice(0, 480);
   try {
     const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(q)}&langpair=${sourceLang}|${targetLang}`);
+    const raw = await res.text();
+    if (debugInfo) debugInfo.mymemory = { status: res.status, body: raw.slice(0, 500) };
     if (!res.ok) return null;
-    const data = await res.json();
+    const data = JSON.parse(raw);
     if (data.quotaFinished) return null;
     const t = data.responseData?.translatedText;
     if (!t || /MYMEMORY WARNING/i.test(t)) return null;
     return t;
   } catch (e) {
+    if (debugInfo) debugInfo.mymemory = { error: String(e) };
     return null;
   }
 }
@@ -76,9 +79,9 @@ async function translateBatchWithGemini(items, targetLang, geminiKey, quotaFlag)
 }
 
 // 여러 문자열을 번역: 1차 MyMemory(건별 병렬), 실패한 것만 2차 Gemini(배치)로 보충.
-async function translateBatch(items, sourceLang, targetLang, geminiKey, quotaFlag) {
+async function translateBatch(items, sourceLang, targetLang, geminiKey, quotaFlag, debugInfo) {
   if (!items.length) return items;
-  const myMemoryResults = await Promise.all(items.map(t => translateOneWithMyMemory(t, sourceLang, targetLang)));
+  const myMemoryResults = await Promise.all(items.map(t => translateOneWithMyMemory(t, sourceLang, targetLang, debugInfo)));
   const result = items.map((orig, i) => myMemoryResults[i] || orig);
   const fallbackItems = [];
   const fallbackIdx = [];
@@ -161,8 +164,9 @@ export async function onRequestPost(context) {
   }
   let body;
   try { body = await request.json(); } catch (e) { body = {}; }
-  const { keyword } = body;
+  const { keyword, debug } = body;
   if (!keyword) return json(400, { error: '검색 키워드가 없습니다.' });
+  const debugInfo = debug ? {} : null;
 
   const quotaFlag = { hit: false };
   let query = keyword;
@@ -171,7 +175,7 @@ export async function onRequestPost(context) {
     if (dict) {
       query = dict;
     } else {
-      const [translated] = await translateBatch([keyword], 'ko', 'en', GEMINI_KEY, quotaFlag);
+      const [translated] = await translateBatch([keyword], 'ko', 'en', GEMINI_KEY, quotaFlag, debugInfo);
       query = translated || keyword;
     }
   }
@@ -196,7 +200,7 @@ export async function onRequestPost(context) {
   if (needsTranslation.length) {
     const flat = [];
     needsTranslation.forEach(a => { flat.push(a.title); flat.push(a.description); });
-    const translated = await translateBatch(flat, 'en', 'ko', GEMINI_KEY, quotaFlag);
+    const translated = await translateBatch(flat, 'en', 'ko', GEMINI_KEY, quotaFlag, debugInfo);
     needsTranslation.forEach((a, i) => {
       const newTitle = translated[i * 2];
       const newDesc = translated[i * 2 + 1];
@@ -204,6 +208,7 @@ export async function onRequestPost(context) {
       if (a.description && newDesc) a.description = newDesc;
     });
   }
+  if (debugInfo) return json(200, debugInfo);
 
   return json(200, {
     articles: top.map(a => ({ title: a.title, description: a.description, url: a.url, source: a.source, publishedAt: a.publishedAt, translated: !!a.translated })),
