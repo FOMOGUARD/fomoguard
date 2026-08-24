@@ -3,11 +3,32 @@ function json(status, obj) {
 }
 const hasKorean = (s) => /[가-힣]/.test(s || '');
 
+// 자주 쓰이는 한국어 금융 키워드는 Gemini 호출 없이 바로 영문 검색어로 매핑한다.
+// GEMINI_SHARED_KEY는 무료 티어 하루 요청 한도가 매우 낮아서(실측: 20건),
+// AI 데일리 분석과 뉴스 번역이 그 한도를 같이 나눠 쓰면 금방 소진된다.
+// 흔한 키워드는 사전으로 걸러서 Gemini 호출 자체를 줄이는 게 가장 확실한 완화책.
+const KEYWORD_DICTIONARY = {
+  '코스피': 'KOSPI', '코스닥': 'KOSDAQ', '나스닥': 'NASDAQ', '다우존스': 'Dow Jones', '다우': 'Dow Jones',
+  '삼성전자': 'Samsung Electronics', 'sk하이닉스': 'SK Hynix', '하이닉스': 'SK Hynix',
+  '엔비디아': 'Nvidia', '테슬라': 'Tesla', '애플': 'Apple', '구글': 'Google', '아마존': 'Amazon',
+  '마이크로소프트': 'Microsoft', '메타': 'Meta', '넷플릭스': 'Netflix', '알파벳': 'Alphabet',
+  '반도체': 'semiconductor', '이차전지': 'battery', '배터리': 'battery', '2차전지': 'battery',
+  '환율': 'exchange rate', '금리': 'interest rate', '연준': 'Federal Reserve', '기준금리': 'interest rate',
+  '비트코인': 'Bitcoin', '이더리움': 'Ethereum', '가상화폐': 'cryptocurrency', '암호화폐': 'cryptocurrency',
+  '금값': 'gold price', '유가': 'oil price', '국제유가': 'crude oil price',
+  'lg에너지솔루션': 'LG Energy Solution', '카카오': 'Kakao', '네이버': 'Naver',
+  '현대차': 'Hyundai Motor', '기아': 'Kia', '포스코': 'POSCO', '셀트리온': 'Celltrion',
+  '미국증시': 'US stock market', '국내증시': 'Korea stock market', 's&p500': 'S&P 500', 'sp500': 'S&P 500'
+};
+function dictLookup(keyword) {
+  return KEYWORD_DICTIONARY[keyword.trim().toLowerCase()] || null;
+}
+
 // 구글 번역 공개 엔드포인트(translate.googleapis.com)는 클라우드 IP에서 오는 요청을
 // 누적 사용량 기준으로 막아버리는 경우가 있어(실측: "Sorry..." 봇 차단 페이지, 429),
 // 이미 안정적으로 쓰고 있는 정식 키 기반 Gemini API로 번역을 대체한다.
 // 기사 여러 건을 한 번에 배치 번역해서 호출 횟수도 최소화한다.
-async function translateBatchWithGemini(items, targetLang, geminiKey, debugInfo) {
+async function translateBatchWithGemini(items, targetLang, geminiKey) {
   if (!geminiKey || !items.length) return items;
   const nonEmpty = items.some(t => (t || '').trim());
   if (!nonEmpty) return items;
@@ -19,11 +40,8 @@ async function translateBatchWithGemini(items, targetLang, geminiKey, debugInfo)
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 4000 } })
     });
-    const raw = await res.text();
-    if (debugInfo) debugInfo.gemini = debugInfo.gemini || [];
-    if (debugInfo) debugInfo.gemini.push({ targetLang, itemCount: items.length, status: res.status, body: raw.slice(0, 800) });
     if (!res.ok) return items;
-    const data = JSON.parse(raw);
+    const data = await res.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     if (!text) return items;
     const result = items.slice();
@@ -35,7 +53,6 @@ async function translateBatchWithGemini(items, targetLang, geminiKey, debugInfo)
     }
     return result;
   } catch (e) {
-    if (debugInfo) { debugInfo.gemini = debugInfo.gemini || []; debugInfo.gemini.push({ targetLang, error: String(e) }); }
     return items;
   }
 }
@@ -54,14 +71,12 @@ function toIsoDate(raw, hasOffset) {
 }
 
 // NewsData.io - 무료 티어에서도 상업적 사용 허용, 하루 200크레딧(기사 최대 2,000건).
-async function fetchNewsData(query, apiKey, debugInfo) {
+async function fetchNewsData(query, apiKey) {
   const url = `https://newsdata.io/api/1/latest?apikey=${encodeURIComponent(apiKey)}&q=${encodeURIComponent(query)}&language=en`;
   try {
     const res = await fetch(url);
-    const raw = await res.text();
-    if (debugInfo) debugInfo.newsdata = { status: res.status, body: raw.slice(0, 500) };
     if (!res.ok) return [];
-    const data = JSON.parse(raw);
+    const data = await res.json();
     if (!Array.isArray(data.results)) return [];
     return data.results.map(a => ({
       title: a.title || '',
@@ -71,20 +86,17 @@ async function fetchNewsData(query, apiKey, debugInfo) {
       publishedAt: toIsoDate(a.pubDate, false)
     })).filter(a => a.title && a.url);
   } catch (e) {
-    if (debugInfo) debugInfo.newsdata = { error: String(e) };
     return [];
   }
 }
 
 // Currents API - 무료 티어에서도 상업적 사용 허용, 하루 최대 약 250~1,000건, 소스 2만개 이상.
-async function fetchCurrents(query, apiKey, debugInfo) {
+async function fetchCurrents(query, apiKey) {
   const url = `https://api.currentsapi.services/v1/search?apiKey=${encodeURIComponent(apiKey)}&keywords=${encodeURIComponent(query)}&language=en`;
   try {
     const res = await fetch(url);
-    const raw = await res.text();
-    if (debugInfo) debugInfo.currents = { status: res.status, body: raw.slice(0, 500) };
     if (!res.ok) return [];
-    const data = JSON.parse(raw);
+    const data = await res.json();
     if (!Array.isArray(data.news)) return [];
     return data.news.map(a => {
       let source = a.author || '';
@@ -98,7 +110,6 @@ async function fetchCurrents(query, apiKey, debugInfo) {
       };
     }).filter(a => a.title && a.url);
   } catch (e) {
-    if (debugInfo) debugInfo.currents = { error: String(e) };
     return [];
   }
 }
@@ -117,23 +128,25 @@ export async function onRequestPost(context) {
   }
   let body;
   try { body = await request.json(); } catch (e) { body = {}; }
-  const { keyword, debug } = body;
+  const { keyword } = body;
   if (!keyword) return json(400, { error: '검색 키워드가 없습니다.' });
-  const debugInfo = debug ? {} : null;
 
   let query = keyword;
   if (hasKorean(keyword)) {
-    const [translated] = await translateBatchWithGemini([keyword], 'en', GEMINI_KEY, debugInfo);
-    query = translated || keyword;
+    const dict = dictLookup(keyword);
+    if (dict) {
+      query = dict;
+    } else {
+      const [translated] = await translateBatchWithGemini([keyword], 'en', GEMINI_KEY);
+      query = translated || keyword;
+    }
   }
-  if (debugInfo) debugInfo.query = query;
-  // 키워드 번역이 안 됐다면(키 없음 등) 한국어 쿼리로라도 그대로 검색 시도 - 결과가 아예 없는 것보다 낫다.
+  // 키워드 번역이 안 됐다면(키 없음, 사전에 없음, Gemini 쿼터 소진 등) 한국어 쿼리로라도 그대로 검색 시도 - 결과가 아예 없는 것보다 낫다.
 
   const [ndArticles, curArticles] = await Promise.all([
-    NEWSDATA_KEY ? fetchNewsData(query, NEWSDATA_KEY, debugInfo) : Promise.resolve([]),
-    CURRENTS_KEY ? fetchCurrents(query, CURRENTS_KEY, debugInfo) : Promise.resolve([])
+    NEWSDATA_KEY ? fetchNewsData(query, NEWSDATA_KEY) : Promise.resolve([]),
+    CURRENTS_KEY ? fetchCurrents(query, CURRENTS_KEY) : Promise.resolve([])
   ]);
-  if (debugInfo) return json(200, debugInfo);
 
   const seen = new Set();
   const merged = [];
