@@ -3,10 +3,7 @@ function json(status, obj) {
 }
 const hasKorean = (s) => /[가-힣]/.test(s || '');
 
-// 자주 쓰이는 한국어 금융 키워드는 Gemini 호출 없이 바로 영문 검색어로 매핑한다.
-// GEMINI_SHARED_KEY는 무료 티어 하루 요청 한도가 매우 낮아서(실측: 20건),
-// AI 데일리 분석과 뉴스 번역이 그 한도를 같이 나눠 쓰면 금방 소진된다.
-// 흔한 키워드는 사전으로 걸러서 Gemini 호출 자체를 줄이는 게 가장 확실한 완화책.
+// 자주 쓰이는 한국어 금융 키워드는 번역 API 호출 없이 바로 영문 검색어로 매핑한다.
 const KEYWORD_DICTIONARY = {
   '코스피': 'KOSPI', '코스닥': 'KOSDAQ', '나스닥': 'NASDAQ', '다우존스': 'Dow Jones', '다우': 'Dow Jones',
   '삼성전자': 'Samsung Electronics', 'sk하이닉스': 'SK Hynix', '하이닉스': 'SK Hynix',
@@ -24,10 +21,28 @@ function dictLookup(keyword) {
   return KEYWORD_DICTIONARY[keyword.trim().toLowerCase()] || null;
 }
 
-// 구글 번역 공개 엔드포인트(translate.googleapis.com)는 클라우드 IP에서 오는 요청을
-// 누적 사용량 기준으로 막아버리는 경우가 있어(실측: "Sorry..." 봇 차단 페이지, 429),
-// 이미 안정적으로 쓰고 있는 정식 키 기반 Gemini API로 번역을 대체한다.
-// 기사 여러 건을 한 번에 배치 번역해서 호출 횟수도 최소화한다.
+// MyMemory Translation API - 키 없이 쓸 수 있고 무료 일일 한도가 넉넉함(익명 5,000단어/일).
+// GEMINI_SHARED_KEY(무료 티어 하루 20건)와 완전히 분리된 자원이라, 번역을 여기로 1차 처리하면
+// AI 데일리 분석과 쿼터를 다툴 일이 없다. 배치 API가 없어서 건별로 병렬 호출한다.
+async function translateOneWithMyMemory(text, sourceLang, targetLang) {
+  if (!text || !text.trim()) return null;
+  const q = text.replace(/\n/g, ' ').slice(0, 480);
+  try {
+    const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(q)}&langpair=${sourceLang}|${targetLang}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.quotaFinished) return null;
+    const t = data.responseData?.translatedText;
+    if (!t || /MYMEMORY WARNING/i.test(t)) return null;
+    return t;
+  } catch (e) {
+    return null;
+  }
+}
+
+// 구글 번역 공개 엔드포인트(translate.googleapis.com)는 클라우드 IP발 요청을 막아버리는 걸 확인해서
+// (실측: "Sorry..." 봇 차단 페이지, 429) 쓰지 않는다. Gemini는 MyMemory가 실패한 항목에 한해
+// 최후 보루로만 쓴다(무료 쿼터가 워낙 낮아서 - 실측 하루 20건).
 async function translateBatchWithGemini(items, targetLang, geminiKey, quotaFlag) {
   if (!geminiKey || !items.length) return items;
   const nonEmpty = items.some(t => (t || '').trim());
@@ -58,6 +73,21 @@ async function translateBatchWithGemini(items, targetLang, geminiKey, quotaFlag)
   } catch (e) {
     return items;
   }
+}
+
+// 여러 문자열을 번역: 1차 MyMemory(건별 병렬), 실패한 것만 2차 Gemini(배치)로 보충.
+async function translateBatch(items, sourceLang, targetLang, geminiKey, quotaFlag) {
+  if (!items.length) return items;
+  const myMemoryResults = await Promise.all(items.map(t => translateOneWithMyMemory(t, sourceLang, targetLang)));
+  const result = items.map((orig, i) => myMemoryResults[i] || orig);
+  const fallbackItems = [];
+  const fallbackIdx = [];
+  myMemoryResults.forEach((r, i) => { if (!r && (items[i] || '').trim()) { fallbackItems.push(items[i]); fallbackIdx.push(i); } });
+  if (fallbackItems.length) {
+    const geminiResults = await translateBatchWithGemini(fallbackItems, targetLang === 'ko' ? 'ko' : 'en', geminiKey, quotaFlag);
+    geminiResults.forEach((t, j) => { if (t && t !== fallbackItems[j]) result[fallbackIdx[j]] = t; });
+  }
+  return result;
 }
 
 function toIsoDate(raw, hasOffset) {
@@ -141,11 +171,11 @@ export async function onRequestPost(context) {
     if (dict) {
       query = dict;
     } else {
-      const [translated] = await translateBatchWithGemini([keyword], 'en', GEMINI_KEY, quotaFlag);
+      const [translated] = await translateBatch([keyword], 'ko', 'en', GEMINI_KEY, quotaFlag);
       query = translated || keyword;
     }
   }
-  // 키워드 번역이 안 됐다면(키 없음, 사전에 없음, Gemini 쿼터 소진 등) 한국어 쿼리로라도 그대로 검색 시도 - 결과가 아예 없는 것보다 낫다.
+  // 키워드 번역이 안 됐다면(사전에도 없고 MyMemory·Gemini 둘 다 실패) 한국어 쿼리로라도 그대로 검색 시도.
 
   const [ndArticles, curArticles] = await Promise.all([
     NEWSDATA_KEY ? fetchNewsData(query, NEWSDATA_KEY) : Promise.resolve([]),
@@ -166,7 +196,7 @@ export async function onRequestPost(context) {
   if (needsTranslation.length) {
     const flat = [];
     needsTranslation.forEach(a => { flat.push(a.title); flat.push(a.description); });
-    const translated = await translateBatchWithGemini(flat, 'ko', GEMINI_KEY, quotaFlag);
+    const translated = await translateBatch(flat, 'en', 'ko', GEMINI_KEY, quotaFlag);
     needsTranslation.forEach((a, i) => {
       const newTitle = translated[i * 2];
       const newDesc = translated[i * 2 + 1];

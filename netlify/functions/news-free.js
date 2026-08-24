@@ -1,9 +1,5 @@
 const hasKorean = (s) => /[가-힣]/.test(s || '');
 
-// 자주 쓰이는 한국어 금융 키워드는 Gemini 호출 없이 바로 영문 검색어로 매핑한다.
-// GEMINI_SHARED_KEY는 무료 티어 하루 요청 한도가 매우 낮아서(실측: 20건),
-// AI 데일리 분석과 뉴스 번역이 그 한도를 같이 나눠 쓰면 금방 소진된다.
-// 흔한 키워드는 사전으로 걸러서 Gemini 호출 자체를 줄이는 게 가장 확실한 완화책.
 const KEYWORD_DICTIONARY = {
   '코스피': 'KOSPI', '코스닥': 'KOSDAQ', '나스닥': 'NASDAQ', '다우존스': 'Dow Jones', '다우': 'Dow Jones',
   '삼성전자': 'Samsung Electronics', 'sk하이닉스': 'SK Hynix', '하이닉스': 'SK Hynix',
@@ -19,6 +15,25 @@ const KEYWORD_DICTIONARY = {
 };
 function dictLookup(keyword) {
   return KEYWORD_DICTIONARY[keyword.trim().toLowerCase()] || null;
+}
+
+// MyMemory Translation API - 키 없이 쓸 수 있고 무료 일일 한도가 넉넉함(익명 5,000단어/일).
+// GEMINI_SHARED_KEY(무료 티어 하루 20건)와 완전히 분리된 자원이라, 번역을 여기로 1차 처리하면
+// AI 데일리 분석과 쿼터를 다툴 일이 없다. 배치 API가 없어서 건별로 병렬 호출한다.
+async function translateOneWithMyMemory(text, sourceLang, targetLang) {
+  if (!text || !text.trim()) return null;
+  const q = text.replace(/\n/g, ' ').slice(0, 480);
+  try {
+    const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(q)}&langpair=${sourceLang}|${targetLang}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.quotaFinished) return null;
+    const t = data.responseData?.translatedText;
+    if (!t || /MYMEMORY WARNING/i.test(t)) return null;
+    return t;
+  } catch (e) {
+    return null;
+  }
 }
 
 async function translateBatchWithGemini(items, targetLang, geminiKey, quotaFlag) {
@@ -51,6 +66,21 @@ async function translateBatchWithGemini(items, targetLang, geminiKey, quotaFlag)
   } catch (e) {
     return items;
   }
+}
+
+// 여러 문자열을 번역: 1차 MyMemory(건별 병렬), 실패한 것만 2차 Gemini(배치)로 보충.
+async function translateBatch(items, sourceLang, targetLang, geminiKey, quotaFlag) {
+  if (!items.length) return items;
+  const myMemoryResults = await Promise.all(items.map(t => translateOneWithMyMemory(t, sourceLang, targetLang)));
+  const result = items.map((orig, i) => myMemoryResults[i] || orig);
+  const fallbackItems = [];
+  const fallbackIdx = [];
+  myMemoryResults.forEach((r, i) => { if (!r && (items[i] || '').trim()) { fallbackItems.push(items[i]); fallbackIdx.push(i); } });
+  if (fallbackItems.length) {
+    const geminiResults = await translateBatchWithGemini(fallbackItems, targetLang === 'ko' ? 'ko' : 'en', geminiKey, quotaFlag);
+    geminiResults.forEach((t, j) => { if (t && t !== fallbackItems[j]) result[fallbackIdx[j]] = t; });
+  }
+  return result;
 }
 
 function toIsoDate(raw, hasOffset) {
@@ -108,7 +138,7 @@ async function fetchCurrents(query, apiKey) {
   }
 }
 
-// 무료 뉴스 조회 - NewsData.io(메인) + Currents API(보조) 병합, 번역은 Gemini(정식 키) 사용.
+// 무료 뉴스 조회 - NewsData.io(메인) + Currents API(보조) 병합, 번역은 MyMemory(1차)+Gemini(보조) 사용.
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
@@ -131,11 +161,10 @@ exports.handler = async (event) => {
     if (dict) {
       query = dict;
     } else {
-      const [translated] = await translateBatchWithGemini([keyword], 'en', GEMINI_KEY, quotaFlag);
+      const [translated] = await translateBatch([keyword], 'ko', 'en', GEMINI_KEY, quotaFlag);
       query = translated || keyword;
     }
   }
-  // 키워드 번역이 안 됐다면(키 없음, 사전에 없음, Gemini 쿼터 소진 등) 한국어 쿼리로라도 그대로 검색 시도 - 결과가 아예 없는 것보다 낫다.
 
   const [ndArticles, curArticles] = await Promise.all([
     NEWSDATA_KEY ? fetchNewsData(query, NEWSDATA_KEY) : Promise.resolve([]),
@@ -156,7 +185,7 @@ exports.handler = async (event) => {
   if (needsTranslation.length) {
     const flat = [];
     needsTranslation.forEach(a => { flat.push(a.title); flat.push(a.description); });
-    const translated = await translateBatchWithGemini(flat, 'ko', GEMINI_KEY, quotaFlag);
+    const translated = await translateBatch(flat, 'en', 'ko', GEMINI_KEY, quotaFlag);
     needsTranslation.forEach((a, i) => {
       const newTitle = translated[i * 2];
       const newDesc = translated[i * 2 + 1];

@@ -21,10 +21,27 @@ function dictLookup(keyword) {
   return KEYWORD_DICTIONARY[keyword.trim().toLowerCase()] || null;
 }
 
-// 예전엔 구글 번역 공개 엔드포인트(translate.googleapis.com)를 기사마다 개별 호출했는데,
-// 이 엔드포인트가 클라우드 IP발 요청을 누적 사용량 기준으로 막아버리는 걸 확인해서
-// (실측: "Sorry..." 봇 차단 페이지, 429), news-free.js와 동일하게 정식 키 기반 Gemini API로
-// 교체하고 여러 건을 한 번에 배치 번역해서 호출 횟수도 최소화한다.
+// MyMemory Translation API - 키 없이 쓸 수 있고 무료 일일 한도가 넉넉함(익명 5,000단어/일).
+// GEMINI_SHARED_KEY(무료 티어 하루 20건)와 완전히 분리된 자원이라 1차로 쓴다.
+async function translateOneWithMyMemory(text, sourceLang, targetLang) {
+  if (!text || !text.trim()) return null;
+  const q = text.replace(/\n/g, ' ').slice(0, 480);
+  try {
+    const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(q)}&langpair=${sourceLang}|${targetLang}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.quotaFinished) return null;
+    const t = data.responseData?.translatedText;
+    if (!t || /MYMEMORY WARNING/i.test(t)) return null;
+    return t;
+  } catch (e) {
+    return null;
+  }
+}
+
+// 구글 번역 공개 엔드포인트(translate.googleapis.com)는 클라우드 IP발 요청을 막아버리는 걸
+// 확인해서(실측: "Sorry..." 봇 차단 페이지, 429) 쓰지 않는다. Gemini는 MyMemory가 실패한
+// 항목에 한해 최후 보루로만 쓴다(무료 쿼터가 낮아서 - 실측 하루 20건).
 async function translateBatchWithGemini(items, targetLang, geminiKey, quotaFlag) {
   if (!geminiKey || !items.length) return items;
   const nonEmpty = items.some(t => (t || '').trim());
@@ -55,6 +72,21 @@ async function translateBatchWithGemini(items, targetLang, geminiKey, quotaFlag)
   } catch (e) {
     return items;
   }
+}
+
+// 여러 문자열을 번역: 1차 MyMemory(건별 병렬), 실패한 것만 2차 Gemini(배치)로 보충.
+async function translateBatch(items, sourceLang, targetLang, geminiKey, quotaFlag) {
+  if (!items.length) return items;
+  const myMemoryResults = await Promise.all(items.map(t => translateOneWithMyMemory(t, sourceLang, targetLang)));
+  const result = items.map((orig, i) => myMemoryResults[i] || orig);
+  const fallbackItems = [];
+  const fallbackIdx = [];
+  myMemoryResults.forEach((r, i) => { if (!r && (items[i] || '').trim()) { fallbackItems.push(items[i]); fallbackIdx.push(i); } });
+  if (fallbackItems.length) {
+    const geminiResults = await translateBatchWithGemini(fallbackItems, targetLang === 'ko' ? 'ko' : 'en', geminiKey, quotaFlag);
+    geminiResults.forEach((t, j) => { if (t && t !== fallbackItems[j]) result[fallbackIdx[j]] = t; });
+  }
+  return result;
 }
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -102,7 +134,7 @@ export async function onRequestPost(context) {
     if (dict) {
       globalQuery = dict;
     } else {
-      const [translated] = await translateBatchWithGemini([keyword], 'en', GEMINI_KEY, quotaFlag);
+      const [translated] = await translateBatch([keyword], 'ko', 'en', GEMINI_KEY, quotaFlag);
       globalQuery = translated || keyword;
     }
   }
@@ -134,7 +166,7 @@ export async function onRequestPost(context) {
   if (needsTranslation.length) {
     const flat = [];
     needsTranslation.forEach(a => { flat.push(a.title); flat.push(a.description || ''); });
-    const translated = await translateBatchWithGemini(flat, 'ko', GEMINI_KEY, quotaFlag);
+    const translated = await translateBatch(flat, 'en', 'ko', GEMINI_KEY, quotaFlag);
     needsTranslation.forEach((a, i) => {
       const newTitle = translated[i * 2];
       const newDesc = translated[i * 2 + 1];
