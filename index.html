@@ -331,6 +331,12 @@ async function callFreeAI({ system, user, maxTokens=1024 }) {
   return data.text || '';
 }
 
+function ownKeyApiError(providerLabel, status, rawText) {
+  const hint = status === 429
+    ? ' — 본인이 등록한 API 키의 요청 한도(또는 결제 설정)를 초과했어요. 해당 서비스의 콘솔에서 쿼터·결제 상태를 확인해주세요. 다른 모델을 선택해보는 것도 방법이에요(설정 > AI 모델).'
+    : '';
+  return new Error(`${providerLabel} API 오류 (${status})${hint}: ${rawText.slice(0,200)}`);
+}
 async function callAI({ system, user, maxTokens=1024 }) {
   if (!hasApiKey()) return callFreeAI({ system, user, maxTokens });
   const provider = state.settings.provider || 'claude';
@@ -343,7 +349,7 @@ async function callAI({ system, user, maxTokens=1024 }) {
       headers: { 'content-type':'application/json', 'x-api-key':apiKey, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
       body: JSON.stringify({ model, max_tokens:maxTokens, system, messages:[{ role:'user', content:user }] })
     });
-    if (!res.ok) throw new Error(`Claude API 오류 (${res.status}): ${(await res.text()).slice(0,200)}`);
+    if (!res.ok) throw ownKeyApiError('Claude', res.status, await res.text());
     const data = await res.json();
     return data.content?.[0]?.text || '';
   }
@@ -352,7 +358,7 @@ async function callAI({ system, user, maxTokens=1024 }) {
       method: 'POST', headers: { 'content-type':'application/json' },
       body: JSON.stringify({ system_instruction:{ parts:[{ text:system }] }, contents:[{ role:'user', parts:[{ text:user }] }], generationConfig:{ maxOutputTokens:maxTokens } })
     });
-    if (!res.ok) throw new Error(`Gemini API 오류 (${res.status}): ${(await res.text()).slice(0,200)}`);
+    if (!res.ok) throw ownKeyApiError('Gemini', res.status, await res.text());
     const data = await res.json();
     return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
   }
@@ -361,7 +367,7 @@ async function callAI({ system, user, maxTokens=1024 }) {
     method: 'POST', headers: { 'content-type':'application/json', 'Authorization':`Bearer ${apiKey}` },
     body: JSON.stringify({ model, max_tokens:maxTokens, messages:[{ role:'system', content:system },{ role:'user', content:user }] })
   });
-  if (!res.ok) throw new Error(`${AI_PROVIDERS[provider].label} API 오류 (${res.status}): ${(await res.text()).slice(0,200)}`);
+  if (!res.ok) throw ownKeyApiError(AI_PROVIDERS[provider].label, res.status, await res.text());
   const data = await res.json();
   return data.choices?.[0]?.message?.content || '';
 }
@@ -1805,7 +1811,7 @@ async function fetchAllNewsKeywords() {
     const cached = state.newsCache[k];
     if (isFreshNewsCache(cached)) continue;
     try { await fetchNewsForKeyword(k); } catch(e) {}
-    await new Promise(r=>setTimeout(r, 400));
+    await new Promise(r=>setTimeout(r, 900));
   }
 }
 let newsViewMode = 'all';

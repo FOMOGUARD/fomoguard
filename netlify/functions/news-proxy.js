@@ -54,14 +54,16 @@ async function translateBatchWithGemini(items, targetLang, geminiKey, quotaFlag)
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 async function searchGNews(q, apiKey, fromDate, max, lang, retriesLeft) {
-  if (retriesLeft === undefined) retriesLeft = 1;
+  if (retriesLeft === undefined) retriesLeft = 2;
   let url = `https://gnews.io/api/v4/search?q=${encodeURIComponent(q)}&sortby=publishedAt&from=${encodeURIComponent(fromDate || '')}&max=${encodeURIComponent(max || 10)}&apikey=${encodeURIComponent(apiKey)}`;
   if (lang) url += `&lang=${encodeURIComponent(lang)}`;
   const res = await fetch(url);
   const text = await res.text();
   if (!res.ok) {
+    // GNews는 짧은 시간에 요청이 몰리면 일일 한도와 별개로 순간 버스트 제한(429)을 걸 수 있어서,
+    // 지수적으로 늘어나는 대기시간으로 재시도한다(1.8초 -> 3.2초).
     if (res.status === 429 && retriesLeft > 0) {
-      await sleep(1500);
+      await sleep(retriesLeft === 2 ? 1800 : 3200);
       return searchGNews(q, apiKey, fromDate, max, lang, retriesLeft - 1);
     }
     let msg = text.slice(0, 200);
@@ -106,7 +108,7 @@ exports.handler = async (event) => {
   try {
     if (korean) {
       domesticResult = await searchGNews(keyword, apiKey, fromDate, perSearchMax, 'ko');
-      await sleep(350);
+      await sleep(600);
     }
     globalResult = await searchGNews(globalQuery, apiKey, fromDate, perSearchMax, null);
   } catch (e) {
@@ -130,9 +132,10 @@ exports.handler = async (event) => {
     needsTranslation.forEach(a => { flat.push(a.title); flat.push(a.description || ''); });
     const translated = await translateBatchWithGemini(flat, 'ko', GEMINI_KEY, quotaFlag);
     needsTranslation.forEach((a, i) => {
-      a.titleKo = translated[i * 2] || a.title;
-      a.descriptionKo = a.description ? (translated[i * 2 + 1] || a.description) : '';
-      a.translated = true;
+      const newTitle = translated[i * 2];
+      const newDesc = translated[i * 2 + 1];
+      if (newTitle && newTitle !== a.title) { a.titleKo = newTitle; a.translated = true; }
+      if (a.description && newDesc) a.descriptionKo = newDesc;
     });
   }
 
