@@ -1764,7 +1764,8 @@ async function fetchNewsForKeywordPaid(keyword, key) {
     articles: data.articles.map(a => {
       const title = a.titleKo||a.title||'', description = a.descriptionKo||a.description||'';
       return { title, url:a.url||'#', source:a.source?.name||'', publishedAt:a.publishedAt||'', description, translated:!!a.translated };
-    })
+    }),
+    translationLimited: !!data.translationLimited
   };
 }
 async function fetchNewsForKeywordFree(keyword) {
@@ -1883,12 +1884,14 @@ function renderNewsFeed() {
   if (!feed) return;
   if (!state.newsKeywords.length) { feed.innerHTML = ''; return; }
 
-  const anyTranslationLimited = !state.settings.newsApiKey && state.newsKeywords.some(k => {
+  const anyTranslationLimited = state.newsKeywords.some(k => {
     const c = state.newsCache[k];
     return isFreshNewsCache(c) && c.translationLimited;
   });
   const translationLimitedBanner = anyTranslationLimited
-    ? `<p class="text-[10px] text-muted text-center py-1.5 px-2">⚠️ 오늘의 무료 번역 한도가 소진돼 일부 기사가 원문(영어)으로 보일 수 있어요. 설정에서 뉴스 API 키를 등록하면 언제나 자동 번역까지 받을 수 있어요.</p>`
+    ? (state.settings.newsApiKey
+        ? `<p class="text-[10px] text-muted text-center py-1.5 px-2">⚠️ 지금 번역 서버가 일시적으로 혼잡해서 일부 기사가 원문(영어)으로 보일 수 있어요. 잠시 후 새로고침하면 번역된 기사로 다시 시도돼요.</p>`
+        : `<p class="text-[10px] text-muted text-center py-1.5 px-2">⚠️ 오늘의 무료 번역 한도가 소진돼 일부 기사가 원문(영어)으로 보일 수 있어요. 설정에서 뉴스 API 키를 등록하면 언제나 자동 번역까지 받을 수 있어요.</p>`)
     : '';
 
   if (newsViewMode === 'all') {

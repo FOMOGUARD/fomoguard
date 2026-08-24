@@ -1,15 +1,53 @@
 const hasKorean = (s) => /[가-힣]/.test(s || '');
 
-async function translateText(text, target) {
-  if (!text) return text;
-  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${target}&dt=t&q=${encodeURIComponent(text)}`;
+const KEYWORD_DICTIONARY = {
+  '코스피': 'KOSPI', '코스닥': 'KOSDAQ', '나스닥': 'NASDAQ', '다우존스': 'Dow Jones', '다우': 'Dow Jones',
+  '삼성전자': 'Samsung Electronics', 'sk하이닉스': 'SK Hynix', '하이닉스': 'SK Hynix',
+  '엔비디아': 'Nvidia', '테슬라': 'Tesla', '애플': 'Apple', '구글': 'Google', '아마존': 'Amazon',
+  '마이크로소프트': 'Microsoft', '메타': 'Meta', '넷플릭스': 'Netflix', '알파벳': 'Alphabet',
+  '반도체': 'semiconductor', '이차전지': 'battery', '배터리': 'battery', '2차전지': 'battery',
+  '환율': 'exchange rate', '금리': 'interest rate', '연준': 'Federal Reserve', '기준금리': 'interest rate',
+  '비트코인': 'Bitcoin', '이더리움': 'Ethereum', '가상화폐': 'cryptocurrency', '암호화폐': 'cryptocurrency',
+  '금값': 'gold price', '유가': 'oil price', '국제유가': 'crude oil price',
+  'lg에너지솔루션': 'LG Energy Solution', '카카오': 'Kakao', '네이버': 'Naver',
+  '현대차': 'Hyundai Motor', '기아': 'Kia', '포스코': 'POSCO', '셀트리온': 'Celltrion',
+  '미국증시': 'US stock market', '국내증시': 'Korea stock market', 's&p500': 'S&P 500', 'sp500': 'S&P 500'
+};
+function dictLookup(keyword) {
+  return KEYWORD_DICTIONARY[keyword.trim().toLowerCase()] || null;
+}
+
+// 구글 번역 공개 엔드포인트는 클라우드 IP발 요청을 막는 걸 확인해서, news-free.js와 동일하게
+// 정식 키 기반 Gemini API로 교체하고 여러 건을 한 번에 배치 번역한다.
+async function translateBatchWithGemini(items, targetLang, geminiKey, quotaFlag) {
+  if (!geminiKey || !items.length) return items;
+  const nonEmpty = items.some(t => (t || '').trim());
+  if (!nonEmpty) return items;
+  const targetLabel = targetLang === 'ko' ? '자연스러운 한국어' : '영어';
+  const prompt = `아래는 번호가 매겨진 텍스트 목록입니다. 각 줄을 ${targetLabel}로 번역해서, 반드시 같은 줄 수만큼 "번호: 번역문" 형식으로만 답하세요. 다른 설명은 절대 붙이지 마세요. 원문이 비어있으면 그 번호는 생략하세요.\n\n${items.map((t, i) => `${i + 1}: ${(t || '').replace(/\n/g, ' ').slice(0, 500)}`).join('\n')}`;
   try {
-    const res = await fetch(url);
-    if (!res.ok) return text;
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${encodeURIComponent(geminiKey)}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 4000 } })
+    });
+    if (!res.ok) {
+      if (res.status === 429 && quotaFlag) quotaFlag.hit = true;
+      return items;
+    }
     const data = await res.json();
-    return (data[0] || []).map(seg => seg[0]).join('') || text;
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    if (!text) return items;
+    const result = items.slice();
+    for (const line of text.split('\n')) {
+      const m = line.match(/^\s*(\d+)\s*[:.]\s*(.+)$/);
+      if (!m) continue;
+      const idx = parseInt(m[1], 10) - 1;
+      if (idx >= 0 && idx < result.length && m[2].trim()) result[idx] = m[2].trim();
+    }
+    return result;
   } catch (e) {
-    return text;
+    return items;
   }
 }
 
@@ -41,6 +79,7 @@ exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
   }
+  const GEMINI_KEY = process.env.GEMINI_SHARED_KEY;
   let body;
   try { body = JSON.parse(event.body || '{}'); } catch (e) { body = {}; }
   const { keyword, apiKey, fromDate, max } = body;
@@ -49,10 +88,17 @@ exports.handler = async (event) => {
 
   const perSearchMax = Math.min(max || 10, 10);
   const korean = hasKorean(keyword);
+  const quotaFlag = { hit: false };
 
   let globalQuery = keyword;
   if (korean) {
-    globalQuery = await translateText(keyword, 'en');
+    const dict = dictLookup(keyword);
+    if (dict) {
+      globalQuery = dict;
+    } else {
+      const [translated] = await translateBatchWithGemini([keyword], 'en', GEMINI_KEY, quotaFlag);
+      globalQuery = translated || keyword;
+    }
   }
 
   let domesticResult = { articles: [], totalArticles: 0 };
@@ -78,14 +124,18 @@ exports.handler = async (event) => {
   merged.sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0));
   const top = merged.slice(0, 10);
 
-  await Promise.all(top.map(async (a) => {
-    if (!hasKorean(a.title)) {
-      a.titleKo = await translateText(a.title, 'ko');
-      a.descriptionKo = a.description ? await translateText(a.description, 'ko') : '';
+  const needsTranslation = top.filter(a => !hasKorean(a.title));
+  if (needsTranslation.length) {
+    const flat = [];
+    needsTranslation.forEach(a => { flat.push(a.title); flat.push(a.description || ''); });
+    const translated = await translateBatchWithGemini(flat, 'ko', GEMINI_KEY, quotaFlag);
+    needsTranslation.forEach((a, i) => {
+      a.titleKo = translated[i * 2] || a.title;
+      a.descriptionKo = a.description ? (translated[i * 2 + 1] || a.description) : '';
       a.translated = true;
-    }
-  }));
+    });
+  }
 
   const totalArticles = Math.max(domesticResult.totalArticles, globalResult.totalArticles);
-  return { statusCode: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ articles: top, totalArticles }) };
+  return { statusCode: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ articles: top, totalArticles, translationLimited: quotaFlag.hit }) };
 };
