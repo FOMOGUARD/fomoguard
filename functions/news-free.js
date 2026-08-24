@@ -50,12 +50,14 @@ function toIsoDate(raw, hasOffset) {
 }
 
 // NewsData.io - 무료 티어에서도 상업적 사용 허용, 하루 200크레딧(기사 최대 2,000건).
-async function fetchNewsData(query, apiKey) {
+async function fetchNewsData(query, apiKey, debugInfo) {
   const url = `https://newsdata.io/api/1/latest?apikey=${encodeURIComponent(apiKey)}&q=${encodeURIComponent(query)}&language=en`;
   try {
     const res = await fetch(url);
+    const raw = await res.text();
+    if (debugInfo) debugInfo.newsdata = { status: res.status, body: raw.slice(0, 500) };
     if (!res.ok) return [];
-    const data = await res.json();
+    const data = JSON.parse(raw);
     if (!Array.isArray(data.results)) return [];
     return data.results.map(a => ({
       title: a.title || '',
@@ -65,17 +67,20 @@ async function fetchNewsData(query, apiKey) {
       publishedAt: toIsoDate(a.pubDate, false)
     })).filter(a => a.title && a.url);
   } catch (e) {
+    if (debugInfo) debugInfo.newsdata = { error: String(e) };
     return [];
   }
 }
 
 // Currents API - 무료 티어에서도 상업적 사용 허용, 하루 최대 약 250~1,000건, 소스 2만개 이상.
-async function fetchCurrents(query, apiKey) {
+async function fetchCurrents(query, apiKey, debugInfo) {
   const url = `https://api.currentsapi.services/v1/search?apiKey=${encodeURIComponent(apiKey)}&keywords=${encodeURIComponent(query)}&language=en`;
   try {
     const res = await fetch(url);
+    const raw = await res.text();
+    if (debugInfo) debugInfo.currents = { status: res.status, body: raw.slice(0, 500) };
     if (!res.ok) return [];
-    const data = await res.json();
+    const data = JSON.parse(raw);
     if (!Array.isArray(data.news)) return [];
     return data.news.map(a => {
       let source = a.author || '';
@@ -89,6 +94,7 @@ async function fetchCurrents(query, apiKey) {
       };
     }).filter(a => a.title && a.url);
   } catch (e) {
+    if (debugInfo) debugInfo.currents = { error: String(e) };
     return [];
   }
 }
@@ -107,20 +113,23 @@ export async function onRequestPost(context) {
   }
   let body;
   try { body = await request.json(); } catch (e) { body = {}; }
-  const { keyword } = body;
+  const { keyword, debug } = body;
   if (!keyword) return json(400, { error: '검색 키워드가 없습니다.' });
+  const debugInfo = debug ? {} : null;
 
   let query = keyword;
   if (hasKorean(keyword)) {
     const [translated] = await translateBatchWithGemini([keyword], 'en', GEMINI_KEY);
     query = translated || keyword;
   }
+  if (debugInfo) debugInfo.query = query;
   // 키워드 번역이 안 됐다면(키 없음 등) 한국어 쿼리로라도 그대로 검색 시도 - 결과가 아예 없는 것보다 낫다.
 
   const [ndArticles, curArticles] = await Promise.all([
-    NEWSDATA_KEY ? fetchNewsData(query, NEWSDATA_KEY) : Promise.resolve([]),
-    CURRENTS_KEY ? fetchCurrents(query, CURRENTS_KEY) : Promise.resolve([])
+    NEWSDATA_KEY ? fetchNewsData(query, NEWSDATA_KEY, debugInfo) : Promise.resolve([]),
+    CURRENTS_KEY ? fetchCurrents(query, CURRENTS_KEY, debugInfo) : Promise.resolve([])
   ]);
+  if (debugInfo) return json(200, debugInfo);
 
   const seen = new Set();
   const merged = [];
