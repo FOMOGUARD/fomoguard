@@ -164,9 +164,8 @@ tailwind.config = {
     <div class="flex items-center justify-between gap-2">
       <div class="flex items-center gap-0.5 min-w-0">
         <button id="btn-back" class="hidden w-8 h-8 -ml-1.5 mr-0.5 rounded-full items-center justify-center text-xl text-[#c6cbd9] flex-shrink-0">←</button>
-        <button id="btn-home" class="flex items-center gap-2 min-w-0">
-          <img id="header-logo-img" src="/mascot/logo-icecube.png" alt="투자워워 로고" class="w-10 h-10 object-contain flex-shrink-0">
-          <span class="font-extrabold text-xl leading-none tracking-tight truncate text-[#eef1f7]">투자워워</span>
+        <button id="btn-home" class="flex items-center min-w-0">
+          <img id="header-logo-img" src="/mascot/logo-horizontal.png" alt="투자워워" class="h-9 w-auto object-contain flex-shrink-0">
         </button>
       </div>
       <button id="btn-profile" class="flex flex-col items-end flex-shrink-0 min-w-0 text-right"></button>
@@ -839,7 +838,7 @@ document.getElementById('btn-back').addEventListener('click', goBack);
 document.getElementById('btn-home').addEventListener('click', goHome);
 (() => {
   const logoImg = document.getElementById('header-logo-img');
-  logoImg.onerror = () => { logoImg.replaceWith(Object.assign(document.createElement('span'), { textContent: '🧊', className: 'text-xl leading-none flex-shrink-0' })); };
+  logoImg.onerror = () => { logoImg.replaceWith(Object.assign(document.createElement('span'), { textContent: '🐜 투자워워', className: 'font-extrabold text-xl leading-none tracking-tight text-[#eef1f7] flex-shrink-0' })); };
 })();
 
 /* ---------------- modal ---------------- */
@@ -3141,7 +3140,8 @@ renderers.settings = function() {
   const modelOptions = (modelListCache[provider] && modelListCache[provider].length) ? modelListCache[provider] : pmeta.modelSuggestions;
   const currentModel = (state.settings.models||{})[provider] || pmeta.defaultModel;
   el.innerHTML = `
-    <h2 class="font-bold text-xl mt-2 mb-4">⚙️ 설정</h2>
+    <div class="flex justify-center mt-2 mb-5"><img src="/mascot/logo-horizontal.png" alt="투자워워" class="h-7 w-auto object-contain"></div>
+    <h2 class="font-bold text-xl mb-4">⚙️ 설정</h2>
 
     <div class="card p-4 mb-4">
       <p class="text-sm font-semibold mb-1">👤 계정 · 클라우드 동기화</p>
