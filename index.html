@@ -339,8 +339,9 @@ function ownKeyApiError(providerLabel, status, rawText) {
 }
 // 본인 키 호출이 실패하면(쿼터·결제 문제, 일시 오류 등 무엇이든) 무료 공유 경로로 자동 대체한다.
 // 이러면 "본인 키에 문제가 생겨도 분석 자체는 일단 나온다"가 보장돼서, 이 기능이 통째로 멈추는
-// 일은 더 이상 없어야 한다. 무료 경로까지 실패하면 그때는 원래(본인 키) 오류를 그대로 보여준다
-// (그게 더 근본적인 원인일 가능성이 높아서).
+// 일은 더 이상 없어야 한다.
+// 둘 다 실패하면 두 실패 사유를 모두 보여준다 — 본인 키 오류만 보여주면 사용자가
+// "내 키만 고치면 되겠네"라고 오해하는데, 실제로는 무료 경로도 막힌 상태라 조치가 달라진다.
 async function callAI({ system, user, maxTokens=1024 }) {
   if (!hasApiKey()) return callFreeAI({ system, user, maxTokens });
   try {
@@ -351,7 +352,7 @@ async function callAI({ system, user, maxTokens=1024 }) {
       toast(`등록하신 API 키 호출에 실패해 무료 AI로 대신 생성했어요. (${e.message.slice(0,60)})`, 'warn');
       return text;
     } catch (e2) {
-      throw e;
+      throw new Error(`두 가지 경로가 모두 실패했어요.\n\n① 내 API 키: ${e.message}\n\n② 무료 AI(대체 시도): ${e2.message}`);
     }
   }
 }
@@ -1932,7 +1933,8 @@ async function generateDailyAnalysis(silent) {
     save(LS.dailyAnalysis, state.dailyAnalysis);
     if (currentTab === 'dashboard') renderers.dashboard();
   } catch (err) {
-    if (box) box.innerHTML = `<span class="text-bad text-xs">분석 생성 실패: ${escapeHtml(err.message)}</span>`;
+    // 줄바꿈(\n)이 포함된 메시지(두 경로 모두 실패한 경우)도 그대로 보이도록 whitespace-pre-line 사용
+    if (box) box.innerHTML = `<span class="text-bad text-xs whitespace-pre-line">분석 생성 실패: ${escapeHtml(err.message)}</span>`;
     if (!silent) toast('데일리 분석 생성 중 오류가 발생했습니다.', 'error');
   }
 }

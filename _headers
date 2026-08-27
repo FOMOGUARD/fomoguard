@@ -21,13 +21,15 @@
 #   img-src     : 마스코트(self), 일지 첨부사진(FileReader → data:), 구글 프로필 사진
 #   connect-src : Supabase(REST/Auth/WS), 사용자 본인 키로 직접 호출하는 AI 4종,
 #                 Twelve Data 시세, 환율 API, 우리 서버 함수(self)
+#                 jsdelivr은 Chart.js 소스맵(.js.map) 때문에 필요 — 개발자도구를 열면
+#                 브라우저가 디버깅용으로 받아오며, 없으면 콘솔에 CSP 위반이 찍힌다(기능엔 무영향).
 #                 ※ 새 외부 API를 붙이면 반드시 여기에 추가할 것. 빠뜨리면 그 기능만 조용히 죽는다.
 #   frame-ancestors : 클릭재킹 차단(회원탈퇴·매도 기록 등 되돌릴 수 없는 버튼 보호)
 #
 # 구글 로그인은 signInWithOAuth의 전체 페이지 리다이렉트라 CSP 대상이 아니다(네비게이션은 막지 않음).
 # form-action은 OAuth 흐름을 깨뜨릴 여지가 있어 의도적으로 넣지 않았다.
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src 'self' data: https://cdn.jsdelivr.net; img-src 'self' data: blob: https://lh3.googleusercontent.com https://*.googleusercontent.com; connect-src 'self' https://ynxnouerpxxemntddqya.supabase.co wss://ynxnouerpxxemntddqya.supabase.co https://api.anthropic.com https://api.openai.com https://api.x.ai https://generativelanguage.googleapis.com https://api.twelvedata.com https://open.er-api.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src 'self' data: https://cdn.jsdelivr.net; img-src 'self' data: blob: https://lh3.googleusercontent.com https://*.googleusercontent.com; connect-src 'self' https://cdn.jsdelivr.net https://ynxnouerpxxemntddqya.supabase.co wss://ynxnouerpxxemntddqya.supabase.co https://api.anthropic.com https://api.openai.com https://api.x.ai https://generativelanguage.googleapis.com https://api.twelvedata.com https://open.er-api.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
