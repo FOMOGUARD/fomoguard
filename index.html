@@ -2126,6 +2126,7 @@ renderers.dashboard = function() {
       <button id="cell-cash" class="row p-3 text-left">
         <p class="text-[10px] text-muted mb-1">현금 잔고</p>
         <p class="text-sm font-bold">${fmtWon(cashBalance)}</p>
+        <p class="text-[9px] text-brand font-semibold mt-0.5">탭해서 입출금 →</p>
       </button>
       <div class="row p-3"><p class="text-[10px] text-muted mb-1">총 매수금액</p><p class="text-sm font-bold">${fmtWon(totalCost)}</p></div>
       <div class="row p-3"><p class="text-[10px] text-muted mb-1">총 손익금액</p><p class="text-sm font-bold ${pnlColor}">${totalPnl>=0?'+':''}${fmtWon(totalPnl)}</p></div>
@@ -2333,7 +2334,7 @@ renderers.factcheck = function() {
   const el = document.getElementById('panel-factcheck');
   el.innerHTML = `
     <h2 class="font-bold text-xl mt-2 mb-1">🧊 포모체크${infoIcon('factcheckQty')}</h2>
-    <p class="text-xs text-muted mb-4">지금 하려는 투자를 입력하면, 등록된 나의 원칙에 비추어 AI가 냉철하게 검증합니다</p>
+    <p class="text-xs text-muted mb-4">지금 하려는 투자를 입력하면, 등록된 나의 원칙에 비추어 AI가 냉철하게 검증합니다. 매수 전 검증뿐 아니라, 관심 있는 종목이 왜 오르거나 내렸는지·궁금한 점을 자유롭게 물어봐도 좋아요.</p>
 
     <div class="card p-4 mb-4 space-y-3">
       <div><label class="text-xs text-muted mb-1 block">종목명 / 티커</label><input id="fc-ticker" type="text" placeholder="예: 테슬라 또는 TSLA"></div>
@@ -2349,8 +2350,8 @@ renderers.factcheck = function() {
         <div><label class="text-xs text-muted mb-1 block">매수 예정 수량</label><input id="fc-qty" type="number" placeholder="예: 10 (주)"></div>
       </div>
       <p id="fc-price-preview" class="text-xs text-muted"></p>
-      <div><label class="text-xs text-muted mb-1 block">왜 지금 사려고 하나요?</label>
-        <textarea id="fc-reason" placeholder="충동을 그대로 적어주세요. 예: 오늘 급등했는데 더 오를 것 같아서"></textarea>
+      <div><label class="text-xs text-muted mb-1 block">왜 지금 사려고 하나요? (또는 궁금한 점을 자유롭게)</label>
+        <textarea id="fc-reason" placeholder="예: 오늘 급등했는데 더 오를 것 같아서 / 왜 오늘 이렇게 떨어졌는지 궁금해요"></textarea>
       </div>
       <button id="fc-run" class="btn-brand w-full py-3.5 rounded-xl text-sm font-bold">냉철하게 검증받기</button>
       ${state.principles.length===0 ? '<p class="text-xs text-warn">⚠️ 등록된 투자원칙이 없어요. 더보기 → 투자원칙에서 먼저 등록하면 더 정확해집니다.</p>' : ''}
@@ -2453,7 +2454,7 @@ async function runFactCheck() {
     : '(등록된 보유 종목 없음)';
   const recentJournal = state.journal.slice(-3).map(j => `- ${j.date}: ${j.content.slice(0,80)}`).join('\n') || '(기록 없음)';
 
-  const systemPrompt = `당신은 '투자워워'라는 개인 투자 집사 AI입니다. 사용자의 등록된 투자 원칙과 현재 포트폴리오, 최근 투자 일지를 참고하여, 사용자가 지금 하려는 투자가 그 원칙에 부합하는지 냉철하고 직설적으로 검증합니다. 근거 없는 응원이나 막연한 긍정은 금지합니다. 감정적 동조보다 사실과 논리를 우선하되, 무례하거나 모욕적이지는 않게 말합니다. 반드시 아래 JSON 형식으로만, 다른 텍스트 없이 답하세요:
+  const systemPrompt = `당신은 '투자워워'라는 개인 투자 집사 AI입니다. 사용자의 등록된 투자 원칙과 현재 포트폴리오, 최근 투자 일지를 참고하여, 사용자가 남긴 글을 판단합니다. 입력이 "매수하려는 이유"라면 지금 하려는 투자가 원칙에 부합하는지 냉철하고 직설적으로 검증하세요. 입력이 특정 종목의 상승·하락 이유나 시황 등을 묻는 "일반 질문"이라면, 매수 검증 형식은 유지하되 그 질문에 실제로 답하는 내용으로 채우세요(예: verdict는 지금 이 상황에 어떤 태도로 대응하면 좋을지, score는 그 판단에 대한 확신도, summary/reasons/advice는 질문에 대한 실제 답변). 근거 없는 응원이나 막연한 긍정은 금지합니다. 감정적 동조보다 사실과 논리를 우선하되, 무례하거나 모욕적이지는 않게 말합니다. 반드시 아래 JSON 형식으로만, 다른 텍스트 없이 답하세요:
 {"verdict":"위배 | 주의 | 양호","score":0-100 사이 정수(원칙 부합도),"summary":"핵심 총평 한두 문장","reasons":["근거 또는 우려 사항 1","근거 2","근거 3"],"advice":"지금 취해야 할 구체적 행동 조언 두세 문장"}`;
 
   const investLines = [`종목: ${ticker}`];
