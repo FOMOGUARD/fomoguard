@@ -2874,47 +2874,72 @@ function openHoldingForm(existing) {
   };
 }
 
-function openCashFlowModal(mode) {
+function openCashFlowModal(mode, editingId) {
   mode = mode === 'withdraw' ? 'withdraw' : 'deposit';
   const balance = computeCashBalance();
   const history = [...state.cashFlows].sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,10);
   const typeLabel = { deposit:'입금', withdraw:'출금', buy:'매수', sell:'매도' };
+  const editing = editingId ? state.cashFlows.find(c => c.id === editingId) : null;
+  // 수정 모드에서는 그 항목을 뺀 나머지로 잔고를 계산해야 출금 한도 검증이 올바르다(자기 자신을 이중으로 빼지 않도록).
+  const balanceExcludingEditing = editing ? balance - editing.amountKRW : balance;
+  if (editing) mode = editing.type === 'withdraw' ? 'withdraw' : 'deposit';
   openModal('현금 잔고', `
     <div class="row p-3 mb-4 text-center">
       <p class="text-[10px] text-muted mb-1">현재 현금 잔고</p>
       <p class="text-xl font-extrabold">${fmtWon(balance)}</p>
     </div>
+    ${editing ? `<p class="text-xs text-brand font-semibold mb-3">✏️ ${typeLabel[editing.type]} 내역 수정 중 <button id="cf-cancel-edit" class="text-muted underline underline-offset-2 ml-1">취소</button></p>` : `
     <div class="seg mb-3" id="cf-seg">
       <button data-m="deposit" class="${mode==='deposit'?'active':''}">입금</button>
       <button data-m="withdraw" class="${mode==='withdraw'?'active':''}">출금</button>
-    </div>
+    </div>`}
     <div class="space-y-3 mb-4">
       <div class="flex gap-2">
-        <div class="flex-1"><label class="text-xs text-muted mb-1 block">${mode==='deposit'?'입금액':'출금액'}</label><input id="cf-amount" type="number" placeholder="예: 1000000"></div>
+        <div class="flex-1"><label class="text-xs text-muted mb-1 block">${mode==='deposit'?'입금액':'출금액'}</label><input id="cf-amount" type="number" placeholder="예: 1000000" value="${editing ? (editing.originalAmount ?? Math.abs(editing.amountKRW)) : ''}"></div>
         <div style="width:96px"><label class="text-xs text-muted mb-1 block">통화</label>
           <select id="cf-currency">
-            <option value="KRW">원화 (₩)</option>
-            <option value="USD">달러 ($)</option>
+            <option value="KRW" ${(!editing||editing.currency!=='USD')?'selected':''}>원화 (₩)</option>
+            <option value="USD" ${editing&&editing.currency==='USD'?'selected':''}>달러 ($)</option>
           </select>
         </div>
       </div>
       <p id="cf-fx-hint" class="text-[10px] text-muted hidden"></p>
-      <div><label class="text-xs text-muted mb-1 block">메모 (선택)</label><input id="cf-note" type="text" placeholder="${mode==='deposit'?'예: 8월 정기 입금':'예: 생활비로 출금'}"></div>
+      <div><label class="text-xs text-muted mb-1 block">메모 (선택)</label><input id="cf-note" type="text" placeholder="${mode==='deposit'?'예: 8월 정기 입금':'예: 생활비로 출금'}" value="${editing?escapeHtml(editing.note||''):''}"></div>
     </div>
-    <button id="cf-submit" class="btn-brand w-full py-3 rounded-xl text-sm font-bold mb-4">${mode==='deposit'?'입금 기록':'출금 기록'}</button>
+    <button id="cf-submit" class="btn-brand w-full py-3 rounded-xl text-sm font-bold mb-4">${editing ? '수정 저장' : (mode==='deposit'?'입금 기록':'출금 기록')}</button>
     <p class="text-xs font-semibold mb-2">최근 내역</p>
     <div class="space-y-1.5 max-h-48 overflow-y-auto">
-      ${history.length ? history.map(c => `
-        <div class="row p-2.5 flex items-center justify-between text-xs">
-          <div><span class="font-semibold">${typeLabel[c.type]||c.type}</span> <span class="text-muted">${escapeHtml(c.date)}${c.note?' · '+escapeHtml(c.note):''}${c.currency==='USD'&&c.originalAmount?' · $'+(+c.originalAmount).toLocaleString('en-US',{maximumFractionDigits:2}):''}</span></div>
-          <span class="font-bold ${c.amountKRW>=0?'text-up':'text-down'}">${c.amountKRW>=0?'+':''}${fmtWon(c.amountKRW)}</span>
+      ${history.length ? history.map(c => {
+        const editable = c.type === 'deposit' || c.type === 'withdraw';
+        return `
+        <div class="row p-2.5 flex items-center justify-between text-xs gap-2">
+          <div class="min-w-0"><span class="font-semibold">${typeLabel[c.type]||c.type}</span> <span class="text-muted">${escapeHtml(c.date)}${c.note?' · '+escapeHtml(c.note):''}${c.currency==='USD'&&c.originalAmount?' · $'+(+c.originalAmount).toLocaleString('en-US',{maximumFractionDigits:2}):''}</span></div>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <span class="font-bold ${c.amountKRW>=0?'text-up':'text-down'}">${c.amountKRW>=0?'+':''}${fmtWon(c.amountKRW)}</span>
+            ${editable ? `<button data-cf-edit="${escapeHtml(c.id)}" class="text-muted">✏️</button><button data-cf-del="${escapeHtml(c.id)}" class="text-bad">✕</button>` : ''}
+          </div>
         </div>
-      `).join('') : '<p class="text-xs text-muted text-center py-3">내역이 없습니다.</p>'}
+      `; }).join('') : '<p class="text-xs text-muted text-center py-3">내역이 없습니다.</p>'}
     </div>
   `, `
     <button class="btn-ghost px-4 py-2.5 rounded-xl text-sm w-full" onclick="closeModal()">닫기</button>
   `);
-  document.querySelectorAll('#cf-seg button').forEach(b => b.onclick = () => openCashFlowModal(b.dataset.m));
+  if (!editing) document.querySelectorAll('#cf-seg button').forEach(b => b.onclick = () => openCashFlowModal(b.dataset.m));
+  const cancelEditBtn = document.getElementById('cf-cancel-edit');
+  if (cancelEditBtn) cancelEditBtn.onclick = () => openCashFlowModal(mode);
+  document.querySelectorAll('[data-cf-edit]').forEach(b => b.onclick = () => openCashFlowModal(mode, b.dataset.cfEdit));
+  document.querySelectorAll('[data-cf-del]').forEach(b => b.onclick = () => {
+    const c = state.cashFlows.find(x => x.id === b.dataset.cfDel);
+    if (!c) return;
+    confirmModal('내역을 삭제할까요?', `'${escapeHtml(typeLabel[c.type]||c.type)} ${fmtWon(Math.abs(c.amountKRW))}' 내역이 삭제되고 현금 잔고에 다시 반영됩니다. 이 작업은 되돌릴 수 없습니다.`, () => {
+      state.cashFlows = state.cashFlows.filter(x => x.id !== c.id);
+      save(LS.cashFlows, state.cashFlows);
+      if (currentTab === 'dashboard') renderers.dashboard();
+      if (currentTab === 'journal') renderJournalList();
+      toast('내역을 삭제했습니다.', 'success');
+      openCashFlowModal(mode);
+    });
+  });
   const curSel = document.getElementById('cf-currency');
   const fxHint = document.getElementById('cf-fx-hint');
   const updateFxHint = () => {
@@ -2931,8 +2956,16 @@ function openCashFlowModal(mode) {
     const note = document.getElementById('cf-note').value.trim();
     if (!amount || amount<=0) { toast(`${mode==='deposit'?'입금':'출금'}액을 올바르게 입력해주세요.`, 'warn'); return; }
     const amountKRW = currency === 'USD' ? amount * (state.fx.rate||1) : amount;
-    if (mode === 'withdraw') {
-      if (amountKRW > balance + 0.5) { toast('현재 현금 잔고보다 큰 금액은 출금할 수 없어요.', 'warn'); return; }
+    const refBalance = editing ? balanceExcludingEditing : balance;
+    if (mode === 'withdraw' && amountKRW > refBalance + 0.5) { toast('현재 현금 잔고보다 큰 금액은 출금할 수 없어요.', 'warn'); return; }
+    if (editing) {
+      editing.amountKRW = mode === 'withdraw' ? -amountKRW : amountKRW;
+      editing.note = note;
+      editing.currency = currency;
+      editing.originalAmount = amount;
+      save(LS.cashFlows, state.cashFlows);
+      toast('내역을 수정했습니다.', 'success');
+    } else if (mode === 'withdraw') {
       recordCashFlow('withdraw', -amountKRW, note, undefined, { currency, amount });
       toast('출금을 기록했습니다.', 'success');
     } else {
