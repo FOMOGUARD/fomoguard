@@ -2396,7 +2396,7 @@ renderers.dashboard = function() {
 
   el.innerHTML = `
     <div class="hero-card rounded-[26px] p-5 mt-2 mb-3">
-      ${!state.profile ? `<div class="flex items-center gap-1.5 mb-2"><span class="badge" style="background:rgba(245,158,11,.16);color:#f59e0b">👀 예시 데이터</span><span class="text-[10px] text-muted">내 돈이 아니라 체험용 숫자예요</span></div>` : ''}
+      ${localStorage.getItem('fomoguard_demo_seed') === '1' ? `<div class="flex items-center gap-1.5 mb-2"><span class="badge" style="background:rgba(245,158,11,.16);color:#f59e0b">👀 예시 데이터</span><span class="text-[10px] text-muted">내 돈이 아니라 체험용 숫자예요</span></div>` : ''}
       <p class="text-xs text-muted mb-1.5">총 평가 자산 (원화 기준)${infoIcon('heroAsset')}</p>
       <p class="text-[32px] font-extrabold leading-tight tracking-tight">${fmtWon(totalAssets)}</p>
       ${hasData ? `<div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
