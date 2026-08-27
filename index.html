@@ -45,13 +45,44 @@ tailwind.config = {
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   .app-shell { max-width: 480px; margin: 0 auto; min-height: 100vh; min-height: 100dvh; background: #0b0e14; position: relative; display: flex; flex-direction: column; }
   @media (min-width: 481px) { .app-shell { box-shadow: 0 0 0 1px #181c26, 0 30px 80px -20px rgba(0,0,0,0.7); min-height: 100vh; min-height: 100dvh; } }
-  /* 데스크탑 대시보드 전용 레이아웃(1차 적용분). 나머지 탭은 아직 그대로 480px 폰 프레임을 쓴다 —
-     switchTab()이 대시보드 탭일 때만 .app-shell에 wide-shell 클래스를 붙인다.
-     편집 모드(.dash-editing)는 절대좌표로 단일 열 스택을 직접 계산하므로(dashCumulativeTops 참고)
-     이 그리드와 절대 함께 켜지 않는다 — 대시보드 렌더 시 편집 모드 여부로 두 클래스를 배타적으로 넣는다. */
+  /* 데스크탑(1024px 이상) 레이아웃 — 1차는 대시보드만 폭을 넓혔다가("여백이 많다·하단 독이
+     어색하다" 피드백을 받고) 사이드바 내비게이션 구조로 다시 짰다. DOM은 그대로 두고(모바일
+     마크업 재사용) CSS만으로 header/main/bottom-nav를 재배치한다 — 새 DOM을 추가하지 않는다.
+     처음엔 CSS Grid(grid-template-areas)로 배치했는데, 그리드 안에서 position:sticky를 쓰면
+     크롬이 정적 위치 계산을 틀려 사이드바가 헤더 위로 겹쳐 올라가는 버그를 실측으로 확인했다
+     (align-self:stretch든 start든 동일하게 재현됨 — 그리드+sticky 조합 자체가 문제였다).
+     그래서 grid를 버리고 header·사이드바를 position:fixed로 뷰포트에 직접 고정하는 훨씬
+     단순한 방식으로 바꿨다 — sticky의 컨테이닝 블록 계산에 얽힐 일이 없어 더 안전하다.
+     사이드바는 브라우저 왼쪽 끝, 헤더는 사이드바 오른쪽부터 화면 끝까지 — Notion·Slack류
+     데스크탑 앱의 표준 골격. 본문(main)만 margin-left로 사이드바를 피하고 자체 max-width로
+     읽기 좋은 폭을 유지한다 — "화면 가운데 좁은 섬" 느낌을 없앤다.
+     편집 모드(.dash-editing)는 절대좌표 단일열 드래그를 쓰므로(dashCumulativeTops 참고)
+     대시보드 그리드(.dash-grid-desktop)와 배타적으로만 켠다(대시보드 렌더 시 분기). */
   @media (min-width: 1024px) {
-    .app-shell.wide-shell { max-width: 900px; box-shadow: none; background: transparent; }
-    .app-shell.wide-shell > .bottom-nav { max-width: 420px; margin: 0 auto 14px; border-radius: 20px; border: 1px solid #1c212c; }
+    .app-shell { max-width: none; width: 100%; margin: 0; box-shadow: none; background: transparent; display: block; min-height: 0; }
+    .app-shell > header {
+      position: fixed; top: 0; left: 216px; right: 0; z-index: 20;
+      padding: 20px 40px; background: #05070c; border-bottom: 1px solid #181c26;
+    }
+    .app-shell > main { margin-left: 216px; max-width: 1200px; padding: 96px 40px 56px; }
+    .app-shell > .bottom-nav {
+      position: fixed; top: 0; left: 0; bottom: 0; width: 216px; z-index: 21;
+      display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start;
+      gap: 4px; padding: 20px 14px 24px; margin: 0;
+      border-top: none; border-right: 1px solid #181c26; background: #0b0e14;
+    }
+    .app-shell > .bottom-nav .navbtn,
+    .app-shell > .bottom-nav .navbtn-center-wrap {
+      flex: none !important; flex-direction: row !important; align-items: center; justify-content: flex-start;
+      gap: 10px; padding: 10px 12px !important; border-radius: 12px; position: static;
+    }
+    .app-shell > .bottom-nav .navbtn:hover:not(.active) { background: rgba(255,255,255,0.04); }
+    .app-shell > .bottom-nav .navbtn .nav-pill { flex-direction: row !important; align-items: center; gap: 10px; padding: 0 !important; width: 100%; border-radius: 10px; }
+    .app-shell > .bottom-nav .navbtn span:first-child,
+    .app-shell > .bottom-nav .navbtn-center-wrap span:first-child { font-size: 18px; }
+    .app-shell > .bottom-nav .navbtn span:last-child,
+    .app-shell > .bottom-nav .navbtn-center-wrap span:last-child { font-size: 13px; margin-top: 0 !important; }
+    .app-shell > .bottom-nav .navbtn-center { position: static; width: 30px; height: 30px; border-radius: 8px; transform: none; font-size: 16px; box-shadow: none; border: none; flex-shrink: 0; }
     #dash-sections-wrap.dash-grid-desktop { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; align-items: start; }
     #dash-sections-wrap.dash-grid-desktop > .dash-section[data-section-id="quote"],
     #dash-sections-wrap.dash-grid-desktop > .dash-section[data-section-id="stats"],
@@ -830,8 +861,6 @@ function switchTab(name, isBack) {
   const panel = document.getElementById('panel-' + name);
   panel.classList.remove('hidden');
   panel.classList.add('fade-in');
-  // PC 데스크탑 와이드 레이아웃은 대시보드에만 우선 적용(나머지 탭은 아직 폰 프레임 유지)
-  document.querySelector('.app-shell').classList.toggle('wide-shell', name === 'dashboard');
   window.scrollTo(0,0);
   if (renderers[name]) renderers[name]();
   renderBottomNav();
