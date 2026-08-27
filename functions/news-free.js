@@ -87,6 +87,14 @@ async function translateBatch(items, sourceLang, targetLang, geminiKey, quotaFla
     const geminiResults = await translateBatchWithGemini(fallbackItems, targetLang === 'ko' ? 'ko' : 'en', geminiKey, quotaFlag);
     geminiResults.forEach((t, j) => { if (t && t !== fallbackItems[j]) result[fallbackIdx[j]] = t; });
   }
+  // 번역을 시도했는데 결과가 원문 그대로면(= 두 경로 다 실패) 사용자에게 알린다.
+  // 예전엔 Gemini가 429를 줄 때만 알렸는데, MyMemory·Gemini가 429가 아닌 방식으로 실패하면
+  // 아무 안내 없이 조용히 영문만 나와서 "번역 기능이 고장난 건가?"로 보였다.
+  if (quotaFlag) {
+    const anyTranslated = result.some((t, i) => t !== items[i]);
+    const anyAttempted = items.some(t => (t || '').trim());
+    if (anyAttempted && !anyTranslated) quotaFlag.hit = true;
+  }
   return result;
 }
 

@@ -80,6 +80,12 @@ async function translateBatch(items, sourceLang, targetLang, geminiKey, quotaFla
     const geminiResults = await translateBatchWithGemini(fallbackItems, targetLang === 'ko' ? 'ko' : 'en', geminiKey, quotaFlag);
     geminiResults.forEach((t, j) => { if (t && t !== fallbackItems[j]) result[fallbackIdx[j]] = t; });
   }
+  // 번역을 시도했는데 결과가 원문 그대로면(= 두 경로 다 실패) 사용자에게 알린다.
+  if (quotaFlag) {
+    const anyTranslated = result.some((t, i) => t !== items[i]);
+    const anyAttempted = items.some(t => (t || '').trim());
+    if (anyAttempted && !anyTranslated) quotaFlag.hit = true;
+  }
   return result;
 }
 
