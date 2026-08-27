@@ -45,6 +45,19 @@ tailwind.config = {
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   .app-shell { max-width: 480px; margin: 0 auto; min-height: 100vh; min-height: 100dvh; background: #0b0e14; position: relative; display: flex; flex-direction: column; }
   @media (min-width: 481px) { .app-shell { box-shadow: 0 0 0 1px #181c26, 0 30px 80px -20px rgba(0,0,0,0.7); min-height: 100vh; min-height: 100dvh; } }
+  /* 데스크탑 대시보드 전용 레이아웃(1차 적용분). 나머지 탭은 아직 그대로 480px 폰 프레임을 쓴다 —
+     switchTab()이 대시보드 탭일 때만 .app-shell에 wide-shell 클래스를 붙인다.
+     편집 모드(.dash-editing)는 절대좌표로 단일 열 스택을 직접 계산하므로(dashCumulativeTops 참고)
+     이 그리드와 절대 함께 켜지 않는다 — 대시보드 렌더 시 편집 모드 여부로 두 클래스를 배타적으로 넣는다. */
+  @media (min-width: 1024px) {
+    .app-shell.wide-shell { max-width: 900px; box-shadow: none; background: transparent; }
+    .app-shell.wide-shell > .bottom-nav { max-width: 420px; margin: 0 auto 14px; border-radius: 20px; border: 1px solid #1c212c; }
+    #dash-sections-wrap.dash-grid-desktop { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; align-items: start; }
+    #dash-sections-wrap.dash-grid-desktop > .dash-section[data-section-id="quote"],
+    #dash-sections-wrap.dash-grid-desktop > .dash-section[data-section-id="stats"],
+    #dash-sections-wrap.dash-grid-desktop > .dash-section[data-section-id="market"],
+    #dash-sections-wrap.dash-grid-desktop > .dash-section[data-section-id="shortcuts"] { grid-column: 1 / -1; }
+  }
   .card { background: #141822; border-radius: 26px; }
   .row { background: #141822; border-radius: 20px; }
   .hero-card { background: radial-gradient(120% 140% at 15% 0%, rgba(49,130,246,0.24), rgba(49,130,246,0) 60%), #141822; }
@@ -817,6 +830,8 @@ function switchTab(name, isBack) {
   const panel = document.getElementById('panel-' + name);
   panel.classList.remove('hidden');
   panel.classList.add('fade-in');
+  // PC 데스크탑 와이드 레이아웃은 대시보드에만 우선 적용(나머지 탭은 아직 폰 프레임 유지)
+  document.querySelector('.app-shell').classList.toggle('wide-shell', name === 'dashboard');
   window.scrollTo(0,0);
   if (renderers[name]) renderers[name]();
   renderBottomNav();
@@ -2412,7 +2427,7 @@ renderers.dashboard = function() {
       <p class="text-xs text-muted">오른쪽 손잡이(☰)를 끌어 옮기거나, 🗑을 눌러 숨겨보세요</p>
       <button id="btn-dash-done" class="btn-brand text-xs font-bold px-4 py-2 rounded-full flex-shrink-0">완료</button>
     </div>` : ''}
-    <div id="dash-sections-wrap" class="relative ${dashEditMode?'dash-editing':''}">
+    <div id="dash-sections-wrap" class="relative ${dashEditMode?'dash-editing':'dash-grid-desktop'}">
       ${visibleOrder.map(id => `
         <div class="dash-section ${dashEditMode?'jiggle':''}" data-section-id="${id}">
           ${dashEditMode ? `<button data-trash="${id}" class="dash-trash-badge">🗑</button><div class="dash-drag-handle" data-dash-handle="${id}"><div class="drag-bar"></div><div class="drag-bar"></div><div class="drag-bar"></div></div>` : ''}
