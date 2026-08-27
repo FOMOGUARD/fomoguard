@@ -70,6 +70,6 @@ exports.handler = async (event) => {
     return { statusCode: 502, body: JSON.stringify({ error: `AI 서버 오류: ${t.slice(0, 200)}` }) };
   }
   const data = await geminiRes.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const text = (data.candidates?.[0]?.content?.parts || []).map(p=>p.text||'').join('') || '';
   return { statusCode: 200, body: JSON.stringify({ text }) };
 };

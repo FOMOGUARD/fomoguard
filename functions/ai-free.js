@@ -75,6 +75,6 @@ export async function onRequestPost(context) {
     return json(502, { error: `AI 서버 오류: ${t.slice(0, 200)}` });
   }
   const data = await geminiRes.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const text = (data.candidates?.[0]?.content?.parts || []).map(p=>p.text||'').join('') || '';
   return json(200, { text });
 }

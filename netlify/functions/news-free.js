@@ -53,7 +53,7 @@ async function translateBatchWithGemini(items, targetLang, geminiKey, quotaFlag)
       return items;
     }
     const data = await res.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const text = (data.candidates?.[0]?.content?.parts || []).map(p=>p.text||'').join('') || '';
     if (!text) return items;
     const result = items.slice();
     for (const line of text.split('\n')) {

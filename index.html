@@ -375,7 +375,7 @@ async function callAIWithOwnKey({ system, user, maxTokens=1024 }) {
     });
     if (!res.ok) throw ownKeyApiError('Gemini', res.status, await res.text());
     const data = await res.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    return (data.candidates?.[0]?.content?.parts || []).map(p=>p.text||'').join('') || '';
   }
   const endpoint = provider === 'openai' ? 'https://api.openai.com/v1/chat/completions' : 'https://api.x.ai/v1/chat/completions';
   const res = await fetch(endpoint, {
@@ -1726,6 +1726,16 @@ async function refreshMarketData(showToast) {
 }
 
 /* ================= AI 데일리 분석 ================= */
+// 포트폴리오·원칙이 그대로여도 매번 같은 내용이 나오지 않도록, 생성할 때마다 관점을 하나 무작위로
+// 골라 그 관점 위주로 작성하게 한다(단, 실제 반영은 여전히 아래 제공 데이터 기준).
+const DAILY_ANALYSIS_ANGLES = [
+  '보유 종목 중 오늘 흐름이 두드러진 한두 종목을 중심으로, 그 종목이 원칙과 어떻게 연결되는지',
+  '등록된 투자 원칙 중 하나를 골라, 오늘 상황에 비추어 그 원칙이 잘 지켜지고 있는지',
+  '관심 키워드로 등록해둔 뉴스들의 시황과 그것이 포트폴리오에 주는 의미',
+  '시장 지표(코스피·S&P500·나스닥 등)의 오늘 흐름과 내 포트폴리오 구성의 상관관계',
+  '코어·알파 비중 밸런스 관점에서 지금 포트폴리오가 원칙에 맞게 배분되어 있는지',
+  '그동안의 누적 실현손익을 돌아보며 얻을 수 있는 교훈'
+];
 async function generateDailyAnalysis(silent) {
   if (!canUseAI()) { if (!silent) { toast('무료 AI를 쓰려면 Google 로그인을 해주세요. (또는 설정에서 본인 API 키 등록)', 'error'); switchTab('settings'); } return; }
   const box = document.getElementById('daily-analysis-text');
@@ -1745,10 +1755,22 @@ async function generateDailyAnalysis(silent) {
   });
   const newsText = newsLines.length ? newsLines.slice(0,10).join('\n') : '(오늘 수집된 관련 뉴스 없음 - 뉴스 언급하지 말 것)';
 
+  // 매번 같은 틀로 반복되지 않게, 실제로 근거가 있는 관점 중에서만 무작위로 하나를 골라 그 관점 위주로 쓰게 한다.
+  const eligibleAngles = [
+    state.portfolio.length>0 && DAILY_ANALYSIS_ANGLES[0],
+    state.principles.length>0 && DAILY_ANALYSIS_ANGLES[1],
+    newsLines.length>0 && DAILY_ANALYSIS_ANGLES[2],
+    state.marketSnapshot && state.marketSnapshot.items?.length>0 && DAILY_ANALYSIS_ANGLES[3],
+    state.portfolio.length>0 && DAILY_ANALYSIS_ANGLES[4],
+    Math.abs(realized.pnl)>0 && DAILY_ANALYSIS_ANGLES[5]
+  ].filter(Boolean);
+  const angle = eligibleAngles.length ? eligibleAngles[Math.floor(Math.random()*eligibleAngles.length)] : '전반적인 오늘의 투자 상황';
+
   const systemPrompt = `당신은 '투자워워'의 데일리 브리핑 작성자입니다. 아래 제공되는 시장 지표, 사용자의 투자 원칙 전문, 보유 종목 현황, 오늘 수집된 실제 뉴스 헤드라인만 근거로 4~6문장의 한국어 데일리 코멘트를 작성하세요.
-- 보유 종목이 있다면 최소 1개 이상 실제 종목명을 구체적으로 언급하며, 그 종목이 사용자의 원칙 중 어떤 조항과 관련 있는지 짚어주세요.
+- 오늘은 특히 "${angle}"을 중심 관점으로 삼아 작성하세요. 다른 정보도 참고하되, 이 관점이 코멘트의 주된 흐름이 되게 하세요.
+- 보유 종목을 언급할 때는 최소 1개 이상 실제 종목명을 구체적으로 언급하며, 그 종목이 사용자의 원칙 중 어떤 조항과 관련 있는지 짚어주세요.
 - 뉴스 헤드라인이 주어졌다면 포트폴리오와 관련된 것을 골라 근거로 삼되, 헤드라인 제목에 없는 구체적 수치·원인·전망은 절대 지어내지 마세요. 헤드라인이 없다면 뉴스는 언급하지 마세요.
-- 매일 다른 관점과 표현으로 작성해서 문장 구조가 반복되지 않게 하세요.
+- 매번 다른 표현과 문장 구조로 작성해서, 이전에 여러 번 봤을 법한 뻔한 문장이 반복되지 않게 하세요.
 - 뻔하고 안전한 일반론보다 사용자의 실제 종목명·원칙 조항에 근거한 구체적인 코멘트를 우선하세요. 다만 확정적인 가격 예측이나 매수/매도 지시는 하지 말고, 판단은 사용자 몫으로 남겨두세요.
 - 다른 설명 없이 코멘트 본문만 출력하세요.`;
   const userPrompt = `[오늘 날짜] ${todayStr()}\n\n[시장 지표 등락률]\n${marketText}\n\n[나의 투자 원칙 전문]\n${principlesText}\n\n[내 포트폴리오 현황]\n${portfolioText}\n\n[누적 실현손익] ${Math.round(realized.pnl).toLocaleString()}원\n\n[오늘 수집된 관심 키워드 뉴스 헤드라인]\n${newsText}\n\n위 정보를 바탕으로 오늘 하루 참고할 구체적인 데일리 코멘트를 작성해줘.`;
