@@ -159,6 +159,32 @@ export async function onRequestPost(context) {
   if (!NEWSDATA_KEY && !CURRENTS_KEY) {
     return json(500, { error: '서버에 무료 뉴스 설정이 아직 안 되어 있습니다.' });
   }
+
+  // 이 엔드포인트는 전체 사용자가 나눠 쓰는 공유 키(NewsData·Currents·Gemini)를 소모한다.
+  // 특히 Gemini 무료 쿼터는 하루 20건뿐이라, 인증 없이 열어두면 외부에서 스크립트 한 번만
+  // 돌려도 그날 전체 사용자의 뉴스 번역이 죽는다(실제로 무인증 호출이 가능한 것을 확인함).
+  // 그래서 /ai-free와 동일하게 로그인한 사용자만 통과시킨다.
+  // (본인 GNews 키를 등록한 사용자는 /news-proxy를 쓰므로 이 경로를 타지 않는다.)
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader) {
+    return json(401, { error: '무료 뉴스는 로그인 후 이용할 수 있어요. (설정에서 본인 뉴스 API 키를 등록하면 로그인 없이도 사용 가능)' });
+  }
+  const SUPABASE_URL = env.SUPABASE_URL;
+  const SUPABASE_ANON_KEY = env.SUPABASE_ANON_KEY;
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    return json(500, { error: '서버에 로그인 검증 설정이 아직 안 되어 있습니다.' });
+  }
+  try {
+    const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: authHeader }
+    });
+    if (!userRes.ok) return json(401, { error: '로그인 확인에 실패했습니다. 다시 로그인해주세요.' });
+    const userData = await userRes.json();
+    if (!userData || !userData.id) return json(401, { error: '사용자 정보를 확인하지 못했습니다.' });
+  } catch (e) {
+    return json(502, { error: '인증 서버에 연결하지 못했습니다.' });
+  }
+
   let body;
   try { body = await request.json(); } catch (e) { body = {}; }
   const { keyword } = body;

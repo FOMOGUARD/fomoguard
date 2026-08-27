@@ -149,6 +149,29 @@ exports.handler = async (event) => {
   if (!NEWSDATA_KEY && !CURRENTS_KEY) {
     return { statusCode: 500, body: JSON.stringify({ error: '서버에 무료 뉴스 설정이 아직 안 되어 있습니다.' }) };
   }
+
+  // 전체 사용자가 나눠 쓰는 공유 키(특히 Gemini 하루 20건)를 소모하는 경로라,
+  // /ai-free와 동일하게 로그인한 사용자만 통과시킨다. (functions/news-free.js와 동일 로직)
+  const authHeader = event.headers.authorization || event.headers.Authorization;
+  if (!authHeader) {
+    return { statusCode: 401, body: JSON.stringify({ error: '무료 뉴스는 로그인 후 이용할 수 있어요. (설정에서 본인 뉴스 API 키를 등록하면 로그인 없이도 사용 가능)' }) };
+  }
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    return { statusCode: 500, body: JSON.stringify({ error: '서버에 로그인 검증 설정이 아직 안 되어 있습니다.' }) };
+  }
+  try {
+    const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: authHeader }
+    });
+    if (!userRes.ok) return { statusCode: 401, body: JSON.stringify({ error: '로그인 확인에 실패했습니다. 다시 로그인해주세요.' }) };
+    const userData = await userRes.json();
+    if (!userData || !userData.id) return { statusCode: 401, body: JSON.stringify({ error: '사용자 정보를 확인하지 못했습니다.' }) };
+  } catch (e) {
+    return { statusCode: 502, body: JSON.stringify({ error: '인증 서버에 연결하지 못했습니다.' }) };
+  }
+
   let body;
   try { body = JSON.parse(event.body || '{}'); } catch (e) { body = {}; }
   const { keyword } = body;

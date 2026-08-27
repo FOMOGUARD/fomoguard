@@ -3,3 +3,17 @@
 
 /
   Cache-Control: no-cache
+
+# 보안 헤더
+# frame-ancestors 'none' : 악성 사이트가 우리 앱을 iframe으로 덮어씌워
+#   로그인된 사용자의 클릭을 가로채는 것(클릭재킹)을 막는다.
+#   회원탈퇴·매도 기록처럼 되돌릴 수 없는 버튼이 있어서 금융 서비스에는 특히 중요하다.
+#   X-Frame-Options는 구형 브라우저용 동일 목적 헤더.
+# 전체 CSP(스크립트 출처 제한)는 Tailwind CDN이 런타임 컴파일에 unsafe-eval을 요구하는 등
+#   허용 목록을 정리해야 해서, 앱을 깨뜨리지 않도록 별도 작업으로 분리한다.
+/*
+  Content-Security-Policy: frame-ancestors 'none'
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=()

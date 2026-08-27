@@ -1916,10 +1916,22 @@ async function fetchNewsForKeywordPaid(keyword, key) {
     translationLimited: !!data.translationLimited
   };
 }
+// 무료 뉴스는 전체 사용자가 공유하는 키를 쓰기 때문에 서버가 로그인 여부를 확인한다
+// (본인 뉴스 API 키를 등록하면 이 경로 대신 /news-proxy를 타서 로그인이 필요 없다).
 async function fetchNewsForKeywordFree(keyword) {
+  if (!supabaseClient || !currentUser) {
+    throw new Error('무료 뉴스는 로그인 후 이용할 수 있어요. (설정에서 본인 뉴스 API 키를 등록하면 로그인 없이도 볼 수 있어요)');
+  }
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  const token = session?.access_token;
+  if (!token) throw new Error('로그인 세션이 만료되었어요. 다시 로그인해주세요.');
   let res;
   try {
-    res = await fetch('/news-free', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ keyword }) });
+    res = await fetch('/news-free', {
+      method:'POST',
+      headers:{ 'content-type':'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ keyword })
+    });
   } catch (e) {
     throw new Error('뉴스 서버에 연결하지 못했습니다. 잠시 후 다시 시도해주세요.');
   }
@@ -1987,7 +1999,9 @@ renderers.news = function() {
       <button id="news-kw-add" class="btn-brand px-4 rounded-xl text-sm font-bold whitespace-nowrap">추가</button>
     </div>
     ${state.newsKeywords.length ? `<div class="flex gap-1.5 flex-wrap mb-4" id="news-kw-chips"></div>` : `<div class="card p-6 text-center text-sm text-muted mb-4">등록된 관심 키워드가 없습니다. 위에서 추가해보세요.</div>`}
-    ${!state.settings.newsApiKey ? `<div class="card p-4 mb-4"><p class="text-xs text-muted">기본 무료 뉴스로 조회하고 있어요. 설정에서 GNews API 키를 등록하면 해외 뉴스 자동 번역 등 더 상세한 뉴스를 볼 수 있어요.</p></div>` : ''}
+    ${!state.settings.newsApiKey ? (currentUser
+      ? `<div class="card p-4 mb-4"><p class="text-xs text-muted">기본 무료 뉴스로 조회하고 있어요. 설정에서 GNews API 키를 등록하면 해외 뉴스 자동 번역 등 더 상세한 뉴스를 볼 수 있어요.</p></div>`
+      : `<div class="card p-4 mb-4" style="border:1px solid rgba(49,130,246,.28)"><p class="text-xs font-semibold mb-1">🔒 무료 뉴스는 로그인이 필요해요</p><p class="text-[11px] text-muted">무료 뉴스는 모든 사용자가 함께 쓰는 공용 자원이라, 남용을 막기 위해 로그인한 분께만 제공하고 있어요. 더보기 → 설정에서 로그인하시거나, 본인 뉴스 API 키를 등록하면 로그인 없이도 볼 수 있어요.</p></div>`) : ''}
     ${state.newsKeywords.length ? `<div class="flex gap-1.5 mb-4 row p-1">
       <button data-view="all" class="flex-1 py-2 rounded-lg text-xs font-bold ${newsViewMode==='all'?'bg-brand text-white':'text-muted'}">🗞️ 전체 모아보기</button>
       <button data-view="byKeyword" class="flex-1 py-2 rounded-lg text-xs font-bold ${newsViewMode==='byKeyword'?'bg-brand text-white':'text-muted'}">🔖 키워드별</button>
