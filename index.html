@@ -3393,8 +3393,7 @@ renderers.settings = function() {
   const modelOptions = (modelListCache[provider] && modelListCache[provider].length) ? modelListCache[provider] : pmeta.modelSuggestions;
   const currentModel = (state.settings.models||{})[provider] || pmeta.defaultModel;
   el.innerHTML = `
-    <div class="flex justify-center mt-2 mb-5"><img src="/mascot/logo-horizontal.png" alt="투자워워" class="h-7 w-auto object-contain"></div>
-    <h2 class="font-bold text-xl mb-4">⚙️ 설정</h2>
+    <h2 class="font-bold text-xl mt-2 mb-4">⚙️ 설정</h2>
 
     <div class="card p-4 mb-4">
       <p class="text-sm font-semibold mb-1">👤 계정 · 클라우드 동기화</p>
@@ -3416,9 +3415,18 @@ renderers.settings = function() {
       `}
     </div>
 
+    <!-- API 키 3종은 대부분의 사용자가 평생 건드리지 않는 항목이라, 기본은 접어두고
+         필요한 사람만 펼쳐 보게 한다(설정 화면 첫인상이 기술 설정 벽이 되지 않도록). -->
+    <details id="st-advanced" class="card p-4 mb-4" ${hasApiKey()||state.settings.twelveDataKey||state.settings.newsApiKey ? 'open' : ''}>
+      <summary class="text-sm font-semibold" style="cursor:pointer;list-style:none">
+        🔧 고급 설정 · API 키 연동 <span class="text-xs text-muted font-normal">(선택 — 안 해도 모든 기능이 동작해요)</span>
+      </summary>
+      <p class="text-[11px] text-muted mt-2 mb-4">본인 API 키를 등록하면 무료 한도 없이 더 상세한 데이터를 받을 수 있어요. 등록하지 않아도 기본 기능은 그대로 쓸 수 있습니다.</p>
+
     <div class="card p-4 mb-4">
       <p class="text-sm font-semibold mb-1">🤖 AI 연동</p>
-      <p class="text-xs text-muted mb-3">${currentUser ? '로그인 상태라 API 키 없이도 하루 3회 무료로 AI 기능을 쓸 수 있어요. ' : ''}API 키를 등록하면 무제한·더 빠르게 이용할 수 있어요. 붙여넣으면 어떤 AI인지 자동으로 인식하고, 사용 가능한 모델 목록을 불러옵니다. ${currentUser ? '로그인 중이라 이 키는 계정에 클라우드 저장되어 다른 기기에서도 로그인만 하면 불러와집니다.' : '로그인하지 않으면 키는 이 브라우저에만 저장됩니다.'}</p>
+      <p class="text-xs text-muted mb-3">${currentUser ? '로그인 상태라 API 키 없이도 하루 3회 무료로 AI 기능을 쓸 수 있어요. ' : ''}API 키를 등록하면 무제한·더 빠르게 이용할 수 있어요. 붙여넣으면 어떤 AI인지 자동으로 인식하고, 사용 가능한 모델 목록을 불러옵니다.</p>
+      <p class="text-[11px] mb-3" style="color:#f59e0b">🔑 키 보관 안내 — 등록한 키는 ${currentUser ? '이 브라우저와 내 계정 클라우드에 저장돼요(다른 기기에서도 로그인하면 불러와집니다).' : '이 브라우저에만 저장돼요.'} 다른 사용자는 볼 수 없지만, 공용 PC에서는 사용 후 <b>데이터 초기화</b>로 지워주세요. 과금되는 키이니 사용량은 각 서비스 콘솔에서 주기적으로 확인하시는 걸 권해요.</p>
       <div class="grid grid-cols-4 gap-1.5 mb-3" id="st-provider-grid">
         ${Object.entries(AI_PROVIDERS).map(([key,p]) => `<button data-provider="${key}" class="row py-2 text-center text-[11px] font-semibold ${provider===key?'ring-2 ring-brand text-brand':'text-[#c6cbd9]'}">${p.label}</button>`).join('')}
       </div>
@@ -3450,6 +3458,7 @@ renderers.settings = function() {
       <label class="text-xs text-muted mb-1 block">GNews API 키</label>
       <input id="st-newskey" type="password" placeholder="발급받은 키 입력" value="${escapeHtml(state.settings.newsApiKey)}">
     </div>
+    </details>
 
     <button id="st-save" class="btn-brand w-full py-3.5 rounded-xl text-sm font-bold mb-4">설정 저장</button>
 
@@ -3462,10 +3471,9 @@ renderers.settings = function() {
       </div>
     </div>
 
-    <button id="btn-goto-taborder" class="card p-3.5 mb-4 w-full text-left flex items-center justify-between">
-      <div class="flex items-center gap-3">${iconBadge('🔀','#64748b')}<div><p class="text-sm font-semibold">탭 순서 편집</p><p class="text-xs text-muted mt-0.5">포모체크는 항상 하단 중앙에 고정되고, 나머지 탭 순서를 바꿀 수 있어요</p></div></div>
-      <span class="text-muted">›</span>
-    </button>
+<!-- 탭 순서 편집은 '더보기' 탭에만 둔다.
+     더보기는 탭 목록을 보여주는 화면이라 그 옆에서 순서를 바꾸는 게 맥락상 자연스럽고,
+     설정에 중복으로 두면 같은 기능의 진입점이 둘이 된다. -->
 
     <div class="card p-4 border border-bad/30 mb-4">
       <p class="text-sm font-semibold text-bad mb-1">⚠️ 데이터 초기화</p>
@@ -3540,7 +3548,6 @@ renderers.settings = function() {
     save(LS.settings, state.settings);
     toast('설정을 저장했습니다.', 'success');
   };
-  document.getElementById('btn-goto-taborder').onclick = () => switchTab('taborder');
   document.getElementById('st-export').onclick = () => {
     const payload = { principles: state.principles, portfolio: state.portfolio, journal: state.journal, transactions: state.transactions, factchecks: state.factchecks, snapshots: state.snapshots, newsKeywords: state.newsKeywords, cashFlows: state.cashFlows, exportedAt: new Date().toISOString() };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json' });
