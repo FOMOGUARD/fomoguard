@@ -5,13 +5,25 @@
   Cache-Control: no-cache
 
 # 보안 헤더
-# frame-ancestors 'none' : 악성 사이트가 우리 앱을 iframe으로 덮어씌워
-#   로그인된 사용자의 클릭을 가로채는 것(클릭재킹)을 막는다.
-#   회원탈퇴·매도 기록처럼 되돌릴 수 없는 버튼이 있어서 금융 서비스에는 특히 중요하다.
-#   X-Frame-Options는 구형 브라우저용 동일 목적 헤더.
-# 전체 CSP(스크립트 출처 제한)는 Tailwind CDN이 런타임 컴파일에 unsafe-eval을 요구하는 등
-#   허용 목록을 정리해야 해서, 앱을 깨뜨리지 않도록 별도 작업으로 분리한다.
+#
+# [1단계] CSP를 Report-Only로 먼저 운영해서 실제 위반을 수집한다.
+#   CSP는 허용 목록을 하나라도 빠뜨리면 해당 기능이 조용히 죽기 때문에,
+#   바로 강제하지 않고 위반 로그를 확인한 뒤 강제 모드로 전환한다.
+#   Report-Only 상태에서는 아무것도 차단되지 않으므로 앱 동작에 영향이 없다.
+#
+# 각 지시어 근거 (index.html에서 실제로 부르는 것만):
+#   script-src  : Tailwind CDN(런타임 컴파일에 unsafe-eval 필요), Chart.js·supabase-js(jsdelivr)
+#                 인라인 <script>가 앱 본체라 unsafe-inline 불가피
+#   style-src   : Pretendard 폰트 CSS(jsdelivr), Tailwind가 런타임에 <style> 주입 → unsafe-inline
+#   img-src     : 마스코트(self), 일지 첨부사진(FileReader → data:), 구글 프로필 사진
+#   connect-src : Supabase(REST/Auth/WebSocket), 사용자 본인 키로 직접 호출하는 AI 4종,
+#                 Twelve Data 시세, 환율 API, 우리 서버 함수(self)
+#   frame-ancestors : 클릭재킹 차단 (회원탈퇴·매도 기록 등 되돌릴 수 없는 버튼 보호)
+#
+# 구글 로그인은 signInWithOAuth의 전체 페이지 리다이렉트 방식이라
+#   frame-src/script-src 대상이 아니다(네비게이션은 CSP가 막지 않음).
 /*
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src 'self' data: https://cdn.jsdelivr.net; img-src 'self' data: blob: https://lh3.googleusercontent.com https://*.googleusercontent.com; connect-src 'self' https://ynxnouerpxxemntddqya.supabase.co wss://ynxnouerpxxemntddqya.supabase.co https://api.anthropic.com https://api.openai.com https://api.x.ai https://generativelanguage.googleapis.com https://api.twelvedata.com https://open.er-api.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'
   Content-Security-Policy: frame-ancestors 'none'
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
