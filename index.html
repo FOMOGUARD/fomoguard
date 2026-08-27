@@ -88,6 +88,23 @@ tailwind.config = {
     #dash-sections-wrap.dash-grid-desktop > .dash-section[data-section-id="stats"],
     #dash-sections-wrap.dash-grid-desktop > .dash-section[data-section-id="market"],
     #dash-sections-wrap.dash-grid-desktop > .dash-section[data-section-id="shortcuts"] { grid-column: 1 / -1; }
+    /* 대시보드 타이포·여백 데스크탑 보정. 카드 HTML 자체(자바스크립트 템플릿 문자열)는 모바일
+       그대로 두고, 여기서 Tailwind 유틸리티 클래스를 CSS로 재정의해 크기만 키운다 —
+       #panel-dashboard(부모 클래스 1개)+유틸리티 클래스 1개 = 특이도 2개라 Tailwind 원본(1개)을
+       셀렉터 힘만으로 이긴다(순서·!important 불필요). 다른 탭은 아직 손대지 않았다(이번 스코프). */
+    #panel-dashboard .text-\[9px\] { font-size: 11px; }
+    #panel-dashboard .text-\[10px\] { font-size: 13px; }
+    #panel-dashboard .text-\[11px\] { font-size: 14px; }
+    #panel-dashboard .text-xs { font-size: 14px; line-height: 1.5; }
+    #panel-dashboard .text-sm { font-size: 16px; line-height: 1.5; }
+    #panel-dashboard .text-\[32px\] { font-size: 44px; }
+    #panel-dashboard .p-3 { padding: 16px; }
+    #panel-dashboard .p-3\.5 { padding: 18px; }
+    #panel-dashboard .p-4 { padding: 20px; }
+    #panel-dashboard .p-5 { padding: 24px; }
+    #panel-dashboard .mb-3 { margin-bottom: 16px; }
+    #panel-dashboard .gap-2 { gap: 10px; }
+    #panel-dashboard .gap-3 { gap: 14px; }
   }
   .card { background: #141822; border-radius: 26px; }
   .row { background: #141822; border-radius: 20px; }
