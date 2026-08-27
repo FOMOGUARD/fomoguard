@@ -1437,18 +1437,71 @@ function computeGrowthStatus() {
 }
 function computeVibeBadge() {
   const holdings = state.portfolio;
+  const hasTx = state.transactions.length > 0;
+
+  // 1. 완전 신규 - 보유 종목도 거래도 없음
+  if (!holdings.length && !hasTx) return { emoji:'🐣', title:'첫걸음 개미', desc:'아직 첫 걸음 전이에요. 급할 필요 없어요, 원칙부터 천천히 세워보세요.' };
+
+  // 2. 원칙 미등록 - 뭔가 활동은 있는데 원칙이 없음
+  if (state.principles.length === 0) return { emoji:'🎲', title:'무계획 개미', desc:'아직 투자 원칙을 등록하지 않으셨어요. 원칙 없이 하는 투자는 지도 없이 하는 여행과 같아요.' };
+
   if (holdings.length) {
+    const portfolioValue = holdings.reduce((s,h)=>s+holdingKRW(h).value, 0);
     const lossCount = holdings.filter(h => { const ret = h.avgPrice>0 ? (h.currentPrice-h.avgPrice)/h.avgPrice : 0; return ret < 0; }).length;
+    // 3. 대부분 손실 중
     if (lossCount / holdings.length >= 0.6) return { emoji:'🔵', title:'파란불 수집가', desc:'보유 종목 대부분이 마이너스예요. 원칙을 다시 점검해볼 시간일지도 몰라요.' };
+
+    const recentFc = state.factchecks.slice(-5);
+    // 4. 포모체크 위배 다발
+    if (recentFc.length >= 3) {
+      const badCount = recentFc.filter(f => f.result?.verdict === '위배').length;
+      if (badCount / recentFc.length >= 0.6) return { emoji:'🦋', title:'불나방', desc:'최근 포모체크에서 "위배" 판정이 많았어요. 불빛(급등)을 쫓다 다치기 쉬워요.' };
+    }
+
+    const weekAgo = Date.now() - 7*86400000;
+    const recentTx = state.transactions.filter(t => Date.parse(t.date) >= weekAgo);
+    // 5. 과매매
+    if (recentTx.length >= 6) return { emoji:'🐒', title:'침팬치', desc:'최근 일주일 매매가 잦아요. 손이 먼저 나가고 있는 건 아닌지 체크해보세요.' };
+
+    // 6. 한 종목 몰빵 (포트폴리오의 50% 이상)
+    if (portfolioValue > 0) {
+      const maxHolding = holdings.reduce((max,h) => { const v = holdingKRW(h).value; return v>max.v ? {h,v} : max; }, {h:null,v:0});
+      if (maxHolding.v / portfolioValue >= 0.5) return { emoji:'🎯', title:'몰빵 개미', desc:'한 종목에 승부를 걸고 계시네요. 확신이 있다면 좋지만, 그 확신이 틀렸을 때의 대비책도 있는지 점검해보세요.' };
+    }
+
+    // 7-8. 장기 무매매 (30일+) - 손실 중이면 손절 회피, 아니면 존버
+    const lastTxDate = state.transactions.length ? Math.max(...state.transactions.map(t=>Date.parse(t.date)||0)) : 0;
+    const daysSinceLastTx = lastTxDate ? (Date.now()-lastTxDate)/86400000 : Infinity;
+    if (daysSinceLastTx >= 30) {
+      if (lossCount > 0) return { emoji:'🩹', title:'존버 손절러', desc:'손실 중인 종목을 오래 들고 계시네요. 원칙에 따른 보유인지, 손절이 아파서 미루는 중인지 한번 짚어보세요.' };
+      return { emoji:'🗿', title:'존버 개미', desc:'한동안 아무것도 안 하셨네요. 그게 원칙에 따른 의연함인지, 그냥 방치인지는 스스로가 제일 잘 알 거예요.' };
+    }
+
+    // 9-10. 현금 비중
+    const cashBalance = computeCashBalance();
+    const totalAssets = portfolioValue + cashBalance;
+    if (totalAssets > 0) {
+      const cashRatio = cashBalance / totalAssets;
+      if (cashRatio < 0.05) return { emoji:'⚡', title:'풀매수 개미', desc:'현금이 거의 없어요. 좋은 기회가 와도 실탄이 없어 못 잡을 수 있다는 것도 하나의 리스크예요.' };
+      if (cashRatio >= 0.4) return { emoji:'💰', title:'현금 부자 개미', desc:'실탄을 두둑히 챙겨두셨네요. 기회를 기다리는 중인지, 결정을 미루고 있는 건 아닌지 스스로에게 물어보세요.' };
+    }
+
+    // 11. 원칙 수호자 (포모체크 양호 다발)
+    if (recentFc.length >= 3) {
+      const goodCount = recentFc.filter(f => f.result?.verdict === '양호').length;
+      if (goodCount / recentFc.length >= 0.6) return { emoji:'🛡️', title:'원칙 수호자', desc:'최근 판단들이 원칙에 잘 맞았어요. 지금의 원칙이 실전에서 통하고 있다는 뜻이에요.' };
+    }
+
+    // 12. 익절 요정 (누적 실현손익 상당한 플러스)
+    const realizedPnl = realizedSummary().pnl;
+    if (realizedPnl >= 300000) return { emoji:'🧚', title:'익절 요정', desc:'차익 실현을 잘 해내고 계세요. 이 감각을 원칙으로 정리해두면 다음에도 똑같이 재현할 수 있어요.' };
   }
-  const recentFc = state.factchecks.slice(-5);
-  if (recentFc.length >= 3) {
-    const badCount = recentFc.filter(f => f.result?.verdict === '위배').length;
-    if (badCount / recentFc.length >= 0.6) return { emoji:'🦋', title:'불나방', desc:'최근 포모체크에서 "위배" 판정이 많았어요. 불빛(급등)을 쫓다 다치기 쉬워요.' };
-  }
-  const weekAgo = Date.now() - 7*86400000;
-  const recentTx = state.transactions.filter(t => Date.parse(t.date) >= weekAgo);
-  if (recentTx.length >= 6) return { emoji:'🐒', title:'침팬치', desc:'최근 일주일 매매가 잦아요. 손이 먼저 나가고 있는 건 아닌지 체크해보세요.' };
+
+  // 13. 갓생 개미 (최근 7일 일지 3회+)
+  const weekAgoJ = Date.now() - 7*86400000;
+  const recentJournal = state.journal.filter(j => Date.parse(j.date) >= weekAgoJ);
+  if (recentJournal.length >= 3) return { emoji:'📓', title:'갓생 개미', desc:'꾸준히 기록하고 계시네요. 나중에 이 기록이 가장 값진 자산이 될 거예요.' };
+
   return { emoji:'🧊', title:'냉철 개미', desc:'최근 흐름이 안정적이에요. 지금처럼만 하면 됩니다.' };
 }
 /* 경험치는 로그인 상태에서는 서버(Supabase RPC, security definer)에서만 검증·지급된다 —
