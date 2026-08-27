@@ -127,7 +127,9 @@ tailwind.config = {
 </head>
 <body class="text-[#eef1f7]">
 
-<div id="toast-wrap" class="fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 items-center w-full max-w-[440px] px-4"></div>
+<!-- 토스트는 헤더(로고·레벨 배지) 아래에서 시작한다.
+     top-4로 두면 헤더 위에 겹쳐서 로고 글자가 뭉개진다(신규 사용자 첫 화면에서 실제로 발생). -->
+<div id="toast-wrap" class="fixed left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 items-center w-full max-w-[440px] px-4" style="top:5.25rem"></div>
 
 <div id="welcome-overlay" class="fixed inset-0 z-[90] hidden bg-[#05070c] px-6 items-center justify-center">
   <div class="w-full max-w-[380px] text-center">
@@ -1542,7 +1544,10 @@ async function grantDailyLoginXp() {
   const today = todayStr();
   if (state.growth.lastLoginXpDate === today) return;
   state.growth.lastLoginXpDate = today;
-  grantXp(10, '오늘의 첫 접속! +10 EXP 🌱');
+  // 아직 온보딩도 끝내지 않은 신규 방문자에게는 EXP 토스트를 띄우지 않는다.
+  // (EXP가 뭔지 모르는 시점에 뜨는 축하 메시지는 안내가 아니라 노이즈다. 적립은 그대로 된다.)
+  const isFirstVisit = !localStorage.getItem('fomoguard_onboarded');
+  grantXp(10, isFirstVisit ? null : '오늘의 첫 접속! +10 EXP 🌱');
 }
 async function grantFactCheckXp() {
   if (currentUser && supabaseClient) {
@@ -1739,7 +1744,63 @@ async function syncStockPrices() {
 }
 // 종목 시세 조회 - Twelve Data 키가 있으면 그걸 우선 쓰고, 없거나 실패하면
 // API 키 등록 없이도 쓸 수 있는 무료 경로(/price-free, Yahoo Finance 기반)로 대체한다.
+/* 한글 종목명 → 종목코드 사전.
+   시세 API는 종목코드만 받는데 사용자는 당연히 "삼성전자"라고 입력한다.
+   (뉴스 키워드도 같은 문제를 사전 방식으로 해결했다 - news-free.js의 KEYWORD_DICTIONARY)
+   여기 없는 종목은 입력값을 그대로 코드로 간주해서 조회한다. */
+const STOCK_NAME_MAP = (() => {
+  const kr = {
+    '삼성전자':'005930','삼성전자우':'005935','sk하이닉스':'000660','하이닉스':'000660',
+    'lg에너지솔루션':'373220','엘지에너지솔루션':'373220','삼성바이오로직스':'207940',
+    '현대차':'005380','현대자동차':'005380','기아':'000270','기아차':'000270',
+    '셀트리온':'068270','네이버':'035420','naver':'035420','카카오':'035720',
+    '포스코홀딩스':'005490','포스코':'005490','lg화학':'051910','엘지화학':'051910',
+    '삼성sdi':'006400','kb금융':'105560','신한지주':'055550','하나금융지주':'086790',
+    '현대모비스':'012330','sk이노베이션':'096770','한화에어로스페이스':'012450',
+    'hmm':'011200','두산에너빌리티':'034020','삼성물산':'028260','lg전자':'066570',
+    '엘지전자':'066570','sk텔레콤':'017670','kt':'030200','크래프톤':'259960',
+    '엔씨소프트':'036570','넷마블':'251270','하이브':'352820','에코프로비엠':'247540',
+    '에코프로':'086520','알테오젠':'196170','한미반도체':'042700','이수페타시스':'007660',
+    '카카오뱅크':'323410','카카오페이':'377300','한국전력':'015760','한전':'015760',
+    '대한항공':'003490','cj제일제당':'097950','아모레퍼시픽':'090430','lg생활건강':'051900',
+    '삼성생명':'032830','삼성화재':'000810','고려아연':'010130','에쓰오일':'010950',
+    '현대건설':'000720','gs건설':'006360','sk스퀘어':'402340','두산밥캣':'241560',
+    '미래에셋증권':'006800','유한양행':'000100','한온시스템':'018880',
+    // 국내 상장 ETF (자주 쓰는 것 위주)
+    'tiger미국s&p500':'360750','tiger미국나스닥100':'133690','kodex200':'069500',
+    'tiger200':'102110','kodex레버리지':'122630','ace미국s&p500':'360200',
+    'tiger차이나전기차solactive':'371460','kodex미국s&p500tr':'379800'
+  };
+  const us = {
+    '테슬라':'TSLA','애플':'AAPL','엔비디아':'NVDA','마이크로소프트':'MSFT','ms':'MSFT',
+    '구글':'GOOGL','알파벳':'GOOGL','아마존':'AMZN','메타':'META','페이스북':'META',
+    '넷플릭스':'NFLX','인텔':'INTC','에이엠디':'AMD','팔란티어':'PLTR','코인베이스':'COIN',
+    '마이크로스트래티지':'MSTR','브로드컴':'AVGO','퀄컴':'QCOM','마이크론':'MU',
+    '디즈니':'DIS','스타벅스':'SBUX','나이키':'NKE','코카콜라':'KO','버크셔해서웨이':'BRK-B',
+    '존슨앤존슨':'JNJ','비자':'V','마스터카드':'MA','월마트':'WMT','보잉':'BA',
+    '우버':'UBER','에어비앤비':'ABNB','리비안':'RIVN','루시드':'LCID','비스트라':'VST',
+    '일라이릴리':'LLY','노보노디스크':'NVO','어도비':'ADBE','세일즈포스':'CRM',
+    '오라클':'ORCL','시스코':'CSCO','페이팔':'PYPL','스포티파이':'SPOT','로블록스':'RBLX',
+    '티에스엠씨':'TSM','타이완반도체':'TSM','유니티':'U','소파이':'SOFI','아이온큐':'IONQ'
+  };
+  const map = {};
+  for (const k in kr) map[k] = { ticker: kr[k], exchange: 'KRX' };
+  for (const k in us) map[k] = { ticker: us[k], exchange: '' };
+  return map;
+})();
+function normalizeStockName(s) { return (s||'').trim().toLowerCase().replace(/\s+/g, ''); }
+/* 입력값이 한글 종목명이면 종목코드로 바꿔주고, 그에 맞는 시장까지 함께 알려준다.
+   사전에 없으면 입력값을 그대로 쓰되, 사용자가 고른 시장을 존중한다. */
+function resolveStock(input, exchange) {
+  const hit = STOCK_NAME_MAP[normalizeStockName(input)];
+  if (hit) return { ticker: hit.ticker, exchange: hit.exchange, matchedName: (input||'').trim() };
+  return { ticker: (input||'').trim(), exchange: exchange || '', matchedName: null };
+}
+
 async function fetchLivePrice(ticker, exchange) {
+  const resolved = resolveStock(ticker, exchange);
+  ticker = resolved.ticker;
+  if (resolved.matchedName) exchange = resolved.exchange;
   const key = state.settings.twelveDataKey;
   if (key) {
     try {
@@ -2332,6 +2393,7 @@ renderers.dashboard = function() {
 
   el.innerHTML = `
     <div class="hero-card rounded-[26px] p-5 mt-2 mb-3">
+      ${!state.profile ? `<div class="flex items-center gap-1.5 mb-2"><span class="badge" style="background:rgba(245,158,11,.16);color:#f59e0b">👀 예시 데이터</span><span class="text-[10px] text-muted">내 돈이 아니라 체험용 숫자예요</span></div>` : ''}
       <p class="text-xs text-muted mb-1.5">총 평가 자산 (원화 기준)${infoIcon('heroAsset')}</p>
       <p class="text-[32px] font-extrabold leading-tight tracking-tight">${fmtWon(totalAssets)}</p>
       ${hasData ? `<div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
@@ -2460,12 +2522,12 @@ renderers.factcheck = function() {
     <p class="text-xs text-muted mb-4">지금 하려는 투자를 입력하면, 등록된 나의 원칙에 비추어 AI가 냉철하게 검증합니다. 매수 전 검증뿐 아니라, 관심 있는 종목이 왜 오르거나 내렸는지·궁금한 점을 자유롭게 물어봐도 좋아요.</p>
 
     <div class="card p-4 mb-4 space-y-3">
-      <div><label class="text-xs text-muted mb-1 block">종목명 / 티커</label><input id="fc-ticker" type="text" placeholder="예: 테슬라 또는 TSLA"></div>
+      <div><label class="text-xs text-muted mb-1 block">종목명 / 종목코드</label><input id="fc-ticker" type="text" placeholder="예: 삼성전자, 테슬라, 005930, TSLA"></div>
       <div class="grid grid-cols-2 gap-3">
-        <div><label class="text-xs text-muted mb-1 block">시장</label>
+        <div><label class="text-xs text-muted mb-1 block">시장 <span class="text-[10px] font-normal">· 종목명 입력 시 자동</span></label>
           <select id="fc-exchange">
-            <option value="">자동(해외)</option>
             <option value="KRX">국내(KRX)</option>
+            <option value="">해외</option>
             <option value="NASDAQ">NASDAQ</option>
             <option value="NYSE">NYSE</option>
           </select>
@@ -2476,7 +2538,7 @@ renderers.factcheck = function() {
       <div><label class="text-xs text-muted mb-1 block">왜 지금 사려고 하나요? (또는 궁금한 점을 자유롭게)</label>
         <textarea id="fc-reason" placeholder="예: 오늘 급등했는데 더 오를 것 같아서 / 왜 오늘 이렇게 떨어졌는지 궁금해요"></textarea>
       </div>
-      <button id="fc-run" class="btn-brand w-full py-3.5 rounded-xl text-sm font-bold">냉철하게 검증받기</button>
+      <button id="fc-run" class="btn-brand w-full py-3.5 rounded-xl text-sm font-bold">${canUseAI() ? '냉철하게 검증받기' : '로그인하고 검증받기'}</button>
       ${state.principles.length===0 ? '<p class="text-xs text-warn">⚠️ 등록된 투자원칙이 없어요. 더보기 → 투자원칙에서 먼저 등록하면 더 정확해집니다.</p>' : ''}
       ${!canUseAI() ? '<p class="text-xs text-warn">⚠️ Google 로그인을 하면 하루 3회 무료로 AI 검증을 받을 수 있어요. (더보기 → 설정에서 본인 API 키를 등록하면 무제한)</p>' : (!hasApiKey() ? '<p class="text-xs text-muted">무료 AI로 검증합니다 (하루 3회). 더 빠르고 무제한으로 쓰려면 설정에서 본인 API 키를 등록하세요.</p>' : '')}
     </div>
@@ -2532,16 +2594,24 @@ function verdictStyle(v) {
 async function updateFcPricePreview() {
   const preview = document.getElementById('fc-price-preview');
   if (!preview) return;
-  const ticker = document.getElementById('fc-ticker').value.trim();
-  const exchange = document.getElementById('fc-exchange').value;
+  const raw = document.getElementById('fc-ticker').value.trim();
+  const exSel = document.getElementById('fc-exchange');
   const qty = +document.getElementById('fc-qty').value;
-  if (!ticker || !qty) { preview.textContent = ''; return; }
+  // 사전에 있는 이름이면 종목코드·시장을 자동으로 맞춰준다(사용자가 시장을 몰라도 되게).
+  const resolved = resolveStock(raw, exSel.value);
+  if (resolved.matchedName && exSel.value !== resolved.exchange) exSel.value = resolved.exchange;
+  const exchange = resolved.matchedName ? resolved.exchange : exSel.value;
+  if (!raw || !qty) { preview.textContent = ''; return; }
   preview.textContent = '시세 확인 중...';
-  const quote = await fetchLivePrice(ticker, exchange);
-  if (!quote) { preview.textContent = '실시간 시세를 찾지 못했어요. 종목명/시장을 다시 확인해주세요.'; return; }
+  const quote = await fetchLivePrice(raw, exSel.value);
+  if (!quote) {
+    preview.innerHTML = `실시간 시세를 찾지 못했어요. <span class="text-muted">종목코드(예: 005930, TSLA)로 입력하거나 시장을 바꿔보세요.</span>`;
+    return;
+  }
   const currency = exchange==='KRX' ? 'KRW' : 'USD';
   const krwAmount = currency==='USD' ? qty*quote.price*(state.fx.rate||1) : qty*quote.price;
-  preview.innerHTML = `현재가 ${fmtPrice(quote.price, currency)} × ${qty}주 ≈ <span class="text-brand font-semibold">${fmtWon(krwAmount)}</span>${quote.source==='free'?' <span class="text-[10px]">(무료 시세 기준)</span>':''}`;
+  const nameHint = resolved.matchedName ? `<span class="text-muted">${escapeHtml(resolved.matchedName)} (${escapeHtml(resolved.ticker)})</span> · ` : '';
+  preview.innerHTML = `${nameHint}현재가 ${fmtPrice(quote.price, currency)} × ${qty}주 ≈ <span class="text-brand font-semibold">${fmtWon(krwAmount)}</span>${quote.source==='free'?' <span class="text-[10px]">(무료 시세 기준)</span>':''}`;
 }
 async function runFactCheck() {
   const ticker = document.getElementById('fc-ticker').value.trim();
@@ -2549,7 +2619,18 @@ async function runFactCheck() {
   const qty = document.getElementById('fc-qty').value.trim();
   const reason = document.getElementById('fc-reason').value.trim();
   if (!ticker || !reason) { toast('종목명과 이유는 필수입니다.', 'warn'); return; }
-  if (!canUseAI()) { toast('무료 AI를 쓰려면 Google 로그인을 해주세요. (또는 설정에서 본인 API 키 등록)', 'error'); switchTab('settings'); return; }
+  // 로그인이 필요한 경우, 입력하던 내용을 잃지 않도록 탭을 강제로 옮기지 않고 제자리에서 안내한다.
+  if (!canUseAI()) {
+    const box = document.getElementById('fc-result');
+    if (box) box.innerHTML = `<div class="card p-5 text-center" style="border:1px solid rgba(49,130,246,.28)">
+      <p class="text-sm font-semibold mb-1">🔒 로그인하면 바로 검증해드릴게요</p>
+      <p class="text-xs text-muted mb-3">입력하신 내용은 그대로 남아 있어요. 로그인하면 하루 3회 무료로 AI 검증을 받을 수 있어요.</p>
+      <div id="fc-login-wrap" class="flex justify-center"></div>
+      <p class="text-[10px] text-muted mt-2">설정에서 본인 API 키를 등록하면 로그인 없이 무제한으로도 쓸 수 있어요.</p>
+    </div>`;
+    if (typeof renderGoogleButton === 'function') renderGoogleButton('fc-login-wrap');
+    return;
+  }
 
   const resultBox = document.getElementById('fc-result');
   resultBox.innerHTML = `<div class="card p-6 text-center text-sm text-muted">
@@ -2557,7 +2638,10 @@ async function runFactCheck() {
     AI가 원칙을 대조하는 중<span class="loading-dots">...</span>
   </div>`;
 
-  const currency = exchange==='KRX' ? 'KRW' : 'USD';
+  // 한글 종목명으로 입력했으면 종목코드·시장을 사전에서 찾아 통화 판정까지 바로잡는다.
+  const fcResolved = resolveStock(ticker, exchange);
+  const effectiveExchange = fcResolved.matchedName ? fcResolved.exchange : exchange;
+  const currency = effectiveExchange==='KRX' ? 'KRW' : 'USD';
   let price = null, amount = null, priceSource = null;
   if (qty) {
     const quote = await fetchLivePrice(ticker, exchange);
