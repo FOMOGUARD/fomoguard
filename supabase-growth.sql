@@ -104,6 +104,11 @@ grant execute on function public.grant_journal_xp() to authenticated;
 -- 오늘의 퀴즈 정답 인덱스는 서버가 직접 판정합니다 (클라이언트가 "정답이었다"고
 -- 우겨도 서버가 자체 정답표와 비교해서 아니면 지급하지 않습니다).
 -- QUIZ_BANK의 24문항과 같은 순서 유지, 문항이 바뀌면 아래 배열도 함께 수정하세요.
+-- 이 배열은 "그날 화면에 섞여서 표시되는 보기 중 몇 번째가 정답인가"를 담고 있습니다.
+-- index.html의 QUIZ_PERM_TABLE(4개 항목의 24가지 순열 고정 테이블)에서
+-- 매일 값 0(=QUIZ_BANK 원본 정답 위치)이 섞인 뒤 몇 번째 자리로 이동하는지를 그대로 옮긴 것입니다.
+-- QUIZ_PERM_TABLE을 바꾸면 이 배열도 반드시 같이 재계산해서 맞춰야 합니다(안 그러면
+-- 서버·클라이언트 정답 판정이 어긋나는 버그가 재발합니다 - 실제로 한 번 이 문제가 있었음).
 create or replace function public.submit_quiz_xp(p_picked_idx int)
 returns public.fomoguard_growth
 language plpgsql
@@ -112,7 +117,7 @@ set search_path = public
 as $$
 declare
   row_ public.fomoguard_growth;
-  answers int[] := array[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+  answers int[] := array[0,0,0,0,0,0,1,1,2,3,2,3,1,1,2,3,2,3,1,1,2,3,2,3];
   today_idx int := (extract(epoch from now())::bigint / 86400) % array_length(answers,1);
   is_correct boolean := (p_picked_idx = answers[today_idx+1]);
 begin
