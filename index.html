@@ -90,45 +90,69 @@ tailwind.config = {
     #dash-sections-wrap.dash-grid-desktop > .dash-section[data-section-id="shortcuts"] { grid-column: 1 / -1; }
     /* 탭별 타이포·여백 데스크탑 보정. 카드 HTML 자체(자바스크립트 템플릿 문자열)는 모바일
        그대로 두고, 여기서 Tailwind 유틸리티 클래스를 CSS로 재정의해 크기만 키운다 —
-       #panel-xxx(부모 클래스 1개)+유틸리티 클래스 1개 = 특이도 2개라 Tailwind 원본(1개)을
-       셀렉터 힘만으로 이긴다(순서·!important 불필요). 스코프를 마친 탭만 셀렉터 목록에 넣는다 —
-       아직 안 한 탭(#panel-journal 등)은 여기 없으니 모바일 그대로. 새 탭을 이 목록에 추가할 때
-       탭별로 다르게 잡아야 하는 값(예: 대시보드의 히어로 숫자, p-3.5/p-5, gap 등)은 아래처럼
-       해당 탭 것만 별도 줄로 둔다. */
-    #panel-dashboard .text-\[9px\],
-    #panel-portfolio .text-\[9px\] { font-size: 11px; }
-    #panel-dashboard .text-\[10px\],
-    #panel-portfolio .text-\[10px\] { font-size: 13px; }
-    #panel-dashboard .text-\[11px\],
-    #panel-portfolio .text-\[11px\] { font-size: 14px; }
-    #panel-dashboard .text-xs,
-    #panel-portfolio .text-xs { font-size: 14px; line-height: 1.5; }
-    #panel-dashboard .text-sm,
-    #panel-portfolio .text-sm { font-size: 16px; line-height: 1.5; }
-    #panel-portfolio .text-xl { font-size: 26px; }
+       :is(#panel-a, #panel-b, ...) 는 그 안에서 가장 센 것(전부 id라 1개)의 특이도를 그대로
+       가지므로, 뒤에 붙는 유틸리티 클래스 1개와 합쳐 특이도 2개가 되어 Tailwind 원본(1개)을
+       셀렉터 힘만으로 이긴다(순서·!important 불필요). 탭마다 따로 안 쓰고 하나로 묶은 건 –
+       모바일 디자인이 애초에 탭 전체가 같은 크기 체계(text-xs/sm, p-4, mb-3 등)를 공유해서다.
+       탭마다 달라야 하는 값(대시보드 히어로 숫자, 포트폴리오 버튼 패딩 등)만 아래 개별 줄로 뺐다. */
+    :is(#panel-dashboard, #panel-portfolio, #panel-news, #panel-factcheck, #panel-principles,
+        #panel-journal, #panel-settings, #panel-more, #panel-growth) .text-\[9px\] { font-size: 11px; }
+    :is(#panel-dashboard, #panel-portfolio, #panel-news, #panel-factcheck, #panel-principles,
+        #panel-journal, #panel-settings, #panel-more, #panel-growth) .text-\[10px\] { font-size: 13px; }
+    :is(#panel-dashboard, #panel-portfolio, #panel-news, #panel-factcheck, #panel-principles,
+        #panel-journal, #panel-settings, #panel-more, #panel-growth) .text-\[11px\] { font-size: 14px; }
+    :is(#panel-dashboard, #panel-portfolio, #panel-news, #panel-factcheck, #panel-principles,
+        #panel-journal, #panel-settings, #panel-more, #panel-growth) .text-xs { font-size: 14px; line-height: 1.5; }
+    :is(#panel-dashboard, #panel-portfolio, #panel-news, #panel-factcheck, #panel-principles,
+        #panel-journal, #panel-settings, #panel-more, #panel-growth) .text-sm { font-size: 16px; line-height: 1.5; }
+    :is(#panel-portfolio, #panel-news, #panel-factcheck, #panel-principles,
+        #panel-journal, #panel-settings, #panel-more, #panel-growth) .text-xl { font-size: 26px; }
+    :is(#panel-dashboard, #panel-portfolio, #panel-news, #panel-factcheck, #panel-principles,
+        #panel-journal, #panel-settings, #panel-more, #panel-growth) .p-3 { padding: 16px; }
+    :is(#panel-dashboard, #panel-portfolio, #panel-news, #panel-factcheck, #panel-principles,
+        #panel-journal, #panel-settings, #panel-more, #panel-growth) .p-4 { padding: 20px; }
+    :is(#panel-dashboard, #panel-portfolio, #panel-news, #panel-factcheck, #panel-principles,
+        #panel-journal, #panel-settings, #panel-more, #panel-growth) .mb-3 { margin-bottom: 16px; }
+    :is(#panel-dashboard, #panel-portfolio, #panel-news, #panel-factcheck, #panel-principles,
+        #panel-journal, #panel-settings, #panel-more, #panel-growth) .mb-4 { margin-bottom: 20px; }
+    :is(#panel-dashboard, #panel-portfolio, #panel-news, #panel-factcheck, #panel-principles,
+        #panel-journal, #panel-settings, #panel-more, #panel-growth) .gap-2 { gap: 10px; }
+    :is(#panel-dashboard, #panel-portfolio, #panel-news, #panel-factcheck, #panel-principles,
+        #panel-journal, #panel-settings, #panel-more, #panel-growth) .gap-3 { gap: 14px; }
+    :is(#panel-news, #panel-factcheck, #panel-principles, #panel-journal) .space-y-3 > * + * { margin-top: 16px; }
+    /* 탭별로만 다른 값 */
     #panel-dashboard .text-\[32px\] { font-size: 44px; }
-    #panel-dashboard .p-3,
-    #panel-portfolio .p-3 { padding: 16px; }
     #panel-dashboard .p-3\.5 { padding: 18px; }
-    #panel-dashboard .p-4,
-    #panel-portfolio .p-4 { padding: 20px; }
     #panel-dashboard .p-5 { padding: 24px; }
-    #panel-portfolio .p-8 { padding: 40px; }
-    #panel-dashboard .mb-3,
-    #panel-portfolio .mb-3 { margin-bottom: 16px; }
-    #panel-dashboard .gap-2,
-    #panel-portfolio .gap-2 { gap: 10px; }
-    #panel-dashboard .gap-3 { gap: 14px; }
+    #panel-portfolio .p-8,
+    #panel-principles .p-8,
+    #panel-journal .p-8 { padding: 40px; }
     #panel-portfolio .py-2 { padding-top: 10px; padding-bottom: 10px; }
     #panel-portfolio .px-2 { padding-left: 10px; padding-right: 10px; }
-    #panel-portfolio .px-3\.5 { padding-left: 18px; padding-right: 18px; }
-    #panel-portfolio .py-2\.5 { padding-top: 12px; padding-bottom: 12px; }
-    /* 종목 카드가 한 줄씩만 쌓여 넓은 화면을 못 쓰길래(대시보드와 같은 이유) 2열 그리드로.
-       원래 space-y-2.5(margin-top 방식)의 세로 간격은 grid gap이 대신하므로 끈다. */
-    #holding-list.space-y-2\.5 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; }
-    #holding-list.space-y-2\.5 > * + * { margin-top: 0; }
-    /* 종목이 하나뿐이거나(반쪽만 채워져 어색함) 목록이 비어 안내 카드 하나만 있을 때는 전체폭으로 */
-    #holding-list.space-y-2\.5 > :only-child { grid-column: 1 / -1; }
+    #panel-portfolio .px-3\.5,
+    #panel-principles .px-3\.5,
+    #panel-journal .px-3\.5 { padding-left: 18px; padding-right: 18px; }
+    #panel-portfolio .py-2\.5,
+    #panel-principles .py-2\.5,
+    #panel-journal .py-2\.5 { padding-top: 12px; padding-bottom: 12px; }
+
+    /* 목록형 탭(종목·원칙·일지)은 카드가 한 줄씩만 쌓여 넓은 화면을 못 쓰길래 2열 그리드로.
+       원래 space-y(margin-top 방식)의 세로 간격은 grid gap이 대신하므로 끈다. 항목이
+       하나뿐이거나 안내 카드 하나만 있을 때는 :only-child로 반쪽만 채워지는 걸 막는다.
+       뉴스 피드는 배너·로딩 문구 같은 이질적인 요소가 같은 목록에 섞여 있어 그리드화하면
+       그 문구들만 반쪽 폭으로 어색해지므로 일부러 제외했다(타이포만 확대). */
+    #holding-list.space-y-2\.5,
+    #principle-list.space-y-3,
+    #journal-list.space-y-3 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px; }
+    #holding-list.space-y-2\.5 > * + *,
+    #principle-list.space-y-3 > * + *,
+    #journal-list.space-y-3 > * + * { margin-top: 0; }
+    #holding-list.space-y-2\.5 > :only-child,
+    #principle-list.space-y-3 > :only-child,
+    #journal-list.space-y-3 > :only-child { grid-column: 1 / -1; }
+    #fc-history.space-y-2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+    #fc-history.space-y-2 > * + * { margin-top: 0; }
+    #fc-history.space-y-2 > :only-child { grid-column: 1 / -1; }
   }
   .card { background: #141822; border-radius: 26px; }
   .row { background: #141822; border-radius: 20px; }
