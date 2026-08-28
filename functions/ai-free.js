@@ -21,9 +21,16 @@ export async function onRequestPost(context) {
 
   let body;
   try { body = await request.json(); } catch (e) { body = {}; }
-  const { system, user, maxTokens } = body;
+  const { system, user, maxTokens, image } = body;
   if (!user) {
     return json(400, { error: '요청 내용이 비어 있습니다.' });
+  }
+  // image는 클라이언트가 만든 data URL 문자열(data:image/jpeg;base64,...) 전체.
+  // Gemini의 inline_data는 mime_type과 순수 base64를 따로 받으므로 여기서 쪼갠다.
+  let imagePart = null;
+  if (image) {
+    const m = /^data:([^;]+);base64,(.+)$/.exec(image);
+    if (m) imagePart = { inline_data: { mime_type: m[1], data: m[2] } };
   }
 
   let rpcRes;
@@ -59,7 +66,7 @@ export async function onRequestPost(context) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           system_instruction: { parts: [{ text: system || '' }] },
-          contents: [{ role: 'user', parts: [{ text: user }] }],
+          contents: [{ role: 'user', parts: imagePart ? [{ text: user }, imagePart] : [{ text: user }] }],
           generationConfig: { maxOutputTokens: maxTokens || 2000 }
         })
       }
