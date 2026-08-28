@@ -75,6 +75,12 @@ export async function onRequestPost(context) {
     return json(502, { error: `AI 서버 오류: ${t.slice(0, 200)}` });
   }
   const data = await geminiRes.json();
+  // 응답이 길이 제한(maxOutputTokens)에 걸려 중간에 잘리면 finishReason이 MAX_TOKENS로 온다.
+  // 이걸 그냥 넘기면 호출부(포모체크 등)에서 JSON 파싱이 깨진 뒤에야 문제를 알게 되고,
+  // 사용자에게는 "API 키·크레딧 확인하라"는 엉뚱한 안내가 나가게 된다 — 원인을 정확히 알려준다.
+  if (data.candidates?.[0]?.finishReason === 'MAX_TOKENS') {
+    return json(502, { error: 'AI 응답이 길이 제한에 걸려 중간에 잘렸습니다. 다시 시도해보세요.' });
+  }
   const text = (data.candidates?.[0]?.content?.parts || []).map(p=>p.text||'').join('') || '';
   return json(200, { text });
 }
