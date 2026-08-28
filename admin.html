@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<!-- 백오피스 - 서비스 화면(index.html) 안에서는 진입점을 두지 않고, /admin 이라는 별도 주소로만
+     접근한다(요청사항). index.html의 SPA 탭 시스템과 완전히 분리된 독립 정적 페이지 - 로그인·
+     스타일 일부만 앱과 동일한 패턴을 재사용하고, 나머지는 이 파일 안에서 전부 처리한다.
+     관리자 판별은 이 페이지가 아니라 서버(/admin-stats, ADMIN_EMAIL 환경변수)가 하므로,
+     이 파일 자체에 권한 로직을 짜 넣을 필요가 없다 - 여기선 그냥 로그인해서 물어볼 뿐이다. -->
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>백오피스 | 투자워워</title>
+<link rel="icon" type="image/png" sizes="192x192" href="/mascot/icon-192.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  html { -webkit-tap-highlight-color: transparent; }
+  body { font-family:'Pretendard', system-ui, sans-serif; background:#05070c; color:#eef1f7; margin:0; }
+  .wrap { max-width: 880px; margin:0 auto; padding: 28px 20px 60px; }
+  .card { background:#141822; border-radius:20px; }
+  .stat-card { background:#141822; border-radius:18px; padding:18px; }
+  .bar-row { display:flex; align-items:center; gap:10px; }
+  .bar-track { flex:1; height:10px; background:#1b202c; border-radius:999px; overflow:hidden; }
+  .bar-fill { height:100%; background:#3182f6; border-radius:999px; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:9px 10px; font-size:13px; border-bottom:1px solid #1c212c; }
+  th { color:#8b93a7; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.03em; }
+  .btn-brand { background:#3182f6; color:#fff; font-weight:700; }
+  .btn-ghost { background:#1b202c; color:#eef1f7; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="flex items-center justify-between mb-8">
+    <div class="flex items-center gap-2">
+      <span style="font-size:22px">🔧</span>
+      <h1 class="font-extrabold text-xl">투자워워 백오피스</h1>
+    </div>
+    <button id="btn-logout" class="hidden btn-ghost text-xs px-3 py-2 rounded-lg">로그아웃</button>
+  </div>
+
+  <div id="view-login" class="text-center py-20">
+    <p class="text-sm text-muted mb-6" style="color:#8b93a7">관리자 계정으로 로그인하세요.</p>
+    <button id="btn-google" class="inline-flex items-center justify-center gap-2.5 bg-white text-[#3c4043] font-semibold text-sm py-3 px-6 rounded-full shadow-lg">
+      <svg width="18" height="18" viewBox="0 0 18 18" class="flex-shrink-0"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.706A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.038l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 7.294C4.672 5.167 6.656 3.58 9 3.58z"/></svg>
+      Google로 로그인
+    </button>
+  </div>
+
+  <div id="view-denied" class="hidden text-center py-20">
+    <p class="text-4xl mb-3">🚫</p>
+    <p class="text-sm font-semibold mb-1">관리자 계정이 아니에요</p>
+    <p class="text-xs" style="color:#8b93a7">이 페이지는 지정된 관리자 계정으로만 볼 수 있어요.</p>
+  </div>
+
+  <div id="view-error" class="hidden text-center py-20">
+    <p class="text-sm font-semibold mb-1" style="color:#f04452">불러오지 못했어요</p>
+    <p id="error-detail" class="text-xs" style="color:#8b93a7"></p>
+  </div>
+
+  <div id="view-loading" class="hidden text-center py-20">
+    <p class="text-sm" style="color:#8b93a7">불러오는 중...</p>
+  </div>
+
+  <div id="view-dashboard" class="hidden">
+    <div class="grid grid-cols-3 gap-3 mb-6">
+      <div class="stat-card">
+        <p class="text-xs mb-1" style="color:#8b93a7">전체 가입자</p>
+        <p id="stat-total" class="text-2xl font-extrabold">-</p>
+      </div>
+      <div class="stat-card">
+        <p class="text-xs mb-1" style="color:#8b93a7">오늘 접속</p>
+        <p id="stat-today" class="text-2xl font-extrabold">-</p>
+      </div>
+      <div class="stat-card">
+        <p class="text-xs mb-1" style="color:#8b93a7">최근 7일 접속</p>
+        <p id="stat-7d" class="text-2xl font-extrabold">-</p>
+      </div>
+    </div>
+
+    <div class="card p-5 mb-6">
+      <p class="text-sm font-semibold mb-4">가입 추이 (최근 30일)</p>
+      <div id="signup-chart" class="space-y-1.5"></div>
+    </div>
+
+    <div class="card p-5">
+      <p class="text-sm font-semibold mb-4">최근 가입자 (최대 20명)</p>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>이메일</th><th>가입일</th><th>최근 로그인</th></tr></thead>
+          <tbody id="signup-table"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <p id="generated-at" class="text-[11px] text-center mt-6" style="color:#8b93a7"></p>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://ynxnouerpxxemntddqya.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_4raTyA00kKvm_rSveM336w_uncSPaNA';
+let supabaseClient = null;
+let currentSession = null;
+
+function showView(name) {
+  ['login','denied','error','loading','dashboard'].forEach(v => {
+    document.getElementById('view-'+v).classList.toggle('hidden', v !== name);
+  });
+  document.getElementById('btn-logout').classList.toggle('hidden', !currentSession || name === 'login');
+}
+
+async function loadStats() {
+  showView('loading');
+  let res;
+  try {
+    res = await fetch('/admin-stats', { headers: { Authorization: `Bearer ${currentSession.access_token}` } });
+  } catch (e) {
+    document.getElementById('error-detail').textContent = '서버에 연결하지 못했습니다.';
+    showView('error');
+    return;
+  }
+  if (res.status === 403) { showView('denied'); return; }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    document.getElementById('error-detail').textContent = data.error || `오류 (${res.status})`;
+    showView('error');
+    return;
+  }
+  renderDashboard(data);
+  showView('dashboard');
+}
+
+function renderDashboard(data) {
+  document.getElementById('stat-total').textContent = data.totalUsers.toLocaleString();
+  document.getElementById('stat-today').textContent = data.activeToday.toLocaleString();
+  document.getElementById('stat-7d').textContent = data.activeLast7Days.toLocaleString();
+
+  // 최근 30일 날짜를 전부 만들어서, 가입자 없는 날도 0으로 채운 막대그래프를 그린다
+  // (데이터가 있는 날짜만 그리면 "빈 날"이 안 보여서 추이 파악이 어려움).
+  const days = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+    days.push({ date: d, count: data.signupsByDate[d] || 0 });
+  }
+  const max = Math.max(1, ...days.map(d => d.count));
+  document.getElementById('signup-chart').innerHTML = days.map(d => `
+    <div class="bar-row">
+      <span style="width:70px;flex-shrink:0;font-size:11px;color:#8b93a7">${d.date.slice(5)}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${d.count/max*100}%"></div></div>
+      <span style="width:24px;flex-shrink:0;font-size:11px;text-align:right">${d.count}</span>
+    </div>
+  `).join('');
+
+  document.getElementById('signup-table').innerHTML = data.recentSignups.length
+    ? data.recentSignups.map(u => `
+      <tr>
+        <td>${escapeHtml(u.email || '(이메일 없음)')}</td>
+        <td>${escapeHtml((u.createdAt || '').slice(0, 10))}</td>
+        <td>${escapeHtml(u.lastSignInAt ? u.lastSignInAt.slice(0, 10) : '-')}</td>
+      </tr>
+    `).join('')
+    : '<tr><td colspan="3" style="text-align:center;color:#8b93a7">가입자가 없습니다.</td></tr>';
+
+  document.getElementById('generated-at').textContent = '갱신: ' + new Date(data.generatedAt).toLocaleString('ko-KR');
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function init() {
+  if (!SUPABASE_URL || SUPABASE_URL.includes('YOUR-PROJECT')) {
+    document.getElementById('error-detail').textContent = 'Supabase 설정이 안 되어 있습니다.';
+    showView('error');
+    return;
+  }
+  supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (session) { currentSession = session; await loadStats(); }
+  else { showView('login'); }
+
+  supabaseClient.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_IN' && session) { currentSession = session; loadStats(); }
+    else if (event === 'SIGNED_OUT') { currentSession = null; showView('login'); }
+  });
+}
+
+document.getElementById('btn-google').onclick = async () => {
+  await supabaseClient.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: window.location.origin + window.location.pathname } });
+};
+document.getElementById('btn-logout').onclick = async () => {
+  await supabaseClient.auth.signOut();
+};
+
+init();
+</script>
+</body>
+</html>
