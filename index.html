@@ -66,7 +66,11 @@ tailwind.config = {
     }
     .app-shell > main { margin-left: 216px; max-width: 1200px; padding: 96px 40px 56px; }
     .app-shell > .bottom-nav {
-      position: fixed; top: 0; left: 0; bottom: 0; width: 216px; z-index: 21;
+      /* 모바일 기본 규칙(.bottom-nav)이 사파리 대응으로 left:50%+transform:translateX(-50%)를
+         쓰는데, transform은 여기서 재정의 안 하면 그대로 상속되어(캐스케이드는 규칙 단위가 아니라
+         속성 단위) 216px 너비 기준 절반(108px)만큼 사이드바가 왼쪽 화면 밖으로 밀려난다
+         (실측으로 발견). transform:none으로 반드시 지워야 한다. */
+      position: fixed; top: 0; left: 0; bottom: 0; width: 216px; max-width: none; transform: none; z-index: 21;
       display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start;
       gap: 4px; padding: 20px 14px 24px; margin: 0;
       border-top: none; border-right: 1px solid #181c26; background: #0b0e14;
@@ -172,7 +176,18 @@ tailwind.config = {
   .btn-ghost:active { background:#232a3a; }
   .badge { font-size:11px; padding:3px 9px; border-radius:999px; font-weight:600; }
   .modal-backdrop { background: rgba(2,4,8,0.75); backdrop-filter: blur(2px); }
-  .bottom-nav { position: sticky; position: -webkit-sticky; bottom: 0; z-index: 30; }
+  /* 모바일 사파리에서 하단 탭바가 사파리 자체 하단 툴바(주소창/탭 전환줄, iOS 15+)에 가려지는
+     문제 대응. sticky는 "문서 스크롤이 이 지점을 지나면" 붙는 방식이라, 사파리가 툴바를
+     접었다 폈다 하며 실제 보이는 뷰포트 높이가 바뀌는 동안 계산이 어긋나 내비가 화면 밖(사파리
+     툴바 뒤)으로 내려가 버리는 경우가 실측됨. position:fixed로 바꾸면 항상 "지금 실제 보이는
+     뷰포트"의 맨 아래에 고정되어 이 문제를 피한다(사파리가 dvh/fixed 조합을 더 안정적으로
+     처리함). app-shell이 max-width:480px 중앙정렬이라, fixed도 같은 폭·중앙정렬을 직접
+     복제한다(fixed는 app-shell을 기준으로 정렬되지 않고 뷰포트 기준이라서). 1024px 이상은
+     아래 데스크탑 전용 규칙이 position 자체를 다시 덮어써서 사이드바로 바뀐다. */
+  .bottom-nav { position: fixed; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; bottom: 0; z-index: 30; }
+  @media (max-width: 1023px) {
+    .app-shell > main { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+  }
   .navbtn.active { color: #3182f6; }
   .navbtn.active .nav-pill { background: rgba(49,130,246,0.15); }
   .nav-pill { border-radius: 999px; padding: 3px 14px; transition: background .15s; }
@@ -730,7 +745,8 @@ const TUTORIAL_STEPS = [
   { tab:'portfolio', target:'#btn-add-holding', img:'pose-chart-up', title:'💼 포트폴리오 — 코어 vs 알파', body:'여기서 보유 종목을 추가해요. 코어는 오래 들고 갈 든든한 종목, 알파는 공격적으로 굴려볼 종목이에요. 종목마다 오늘 얼마나 움직였는지도 바로 보여드려요.' },
   { tab:'journal', target:'#btn-add-journal', img:'pose-point', title:'📓 투자일지 — 미래의 나에게 남기는 메모', body:'오늘 왜 그런 선택을 했는지 적어두세요. 매수·매도, 현금 입출금 기록도 여기 자동으로 쌓여요.' },
   { tab:'more', target:'[data-tab="more"]', img:'face-B', title:'☰ 더보기 — 설정은 다 여기에', body:'탭 순서 바꾸기, 실시간 뉴스, 로그인·API 키 설정, 그리고 투자원칙까지 전부 여기 모여있어요.' },
-  { tab:'principles', target:'#btn-compass', img:'face-G', title:'📜 투자원칙 — 나만의 투자 규칙', body:'"-15%면 무조건 재검토" 같은 나만의 규칙을 적어두면, 포모체크가 그 규칙을 기준으로 판단해줘요. 뭘 적어야 할지 모르겠으면 투자 나침반부터 눌러보세요.' }
+  { tab:'principles', target:'#btn-compass', img:'face-G', title:'📜 투자원칙 — 나만의 투자 규칙', body:'"-15%면 무조건 재검토" 같은 나만의 규칙을 적어두면, 포모체크가 그 규칙을 기준으로 판단해줘요. 뭘 적어야 할지 모르겠으면 투자 나침반부터 눌러보세요.' },
+  { tab:'growth', target:'.hero-card', img:'face-E', title:'🌱 성장 — 매일 조금씩 레벨업', body:'투자 습관은 하루아침에 안 만들어지죠. 로그인하고, 오늘의 퀴즈 풀고, 일지 쓸 때마다 경험치가 쌓여요. 오늘 나는 어떤 투자 유형인지도 여기서 확인할 수 있어요.' }
 ];
 let tutorialStep = 0;
 let tutorialNavWatcher = null;
@@ -775,6 +791,11 @@ function positionTutorialSpotlight(selector) {
 }
 function renderTutorialExplanation(step) {
   tutorialNavWatcher = null;
+  // 튜토리얼은 강조된 진짜 버튼을 직접 누를 수 있게 설계돼 있어서(예: "+오늘 기록"),
+  // 사용자가 그걸 눌러 모달을 연 채로 다음 단계로 넘어오면 모달과 다음 설명 카드가
+  // 화면에 같이 떠 있는 상태가 된다("가이드가 막힌다"는 피드백의 실제 원인). 단계가
+  // 바뀔 때마다 열려 있는 모달을 정리해서 이 충돌을 막는다.
+  closeModal();
   document.getElementById('tutorial-img').src = `/mascot/${step.img}.png`;
   document.getElementById('tutorial-title').textContent = step.title;
   document.getElementById('tutorial-body').textContent = step.body;
@@ -785,20 +806,27 @@ function renderTutorialExplanation(step) {
   requestAnimationFrame(() => requestAnimationFrame(() => positionTutorialSpotlight(step.target)));
 }
 function beginTutorialNavPrompt(idx) {
+  closeModal();
   const step = TUTORIAL_STEPS[idx];
   const flank = visibleFlank();
+  // 데스크탑(1024px 이상)은 하단 탭바 대신 왼쪽 사이드바라 "아래/👇" 안내가 방향이 틀리게
+  // 보인다("버튼 위치나 안내가 안 맞더라" 피드백). 화면 폭으로 분기해 방향 문구만 바꾼다 —
+  // 강조 위치 자체는 positionTutorialSpotlight가 실제 렌더된 좌표를 그대로 읽으니 손댈 필요 없음.
+  const isWide = window.innerWidth >= 1024;
+  const arrow = isWide ? '👈' : '👇';
+  const dir = isWide ? '왼쪽' : '아래';
   let navTarget, navLabel, waitTab;
   if (step.tab === CENTER_TAB || flank.includes(step.tab) || step.tab === 'more') {
     navTarget = `[data-tab="${step.tab}"]`;
-    navLabel = `👇 아래 "${TAB_META[step.tab] ? TAB_META[step.tab].label : '더보기'}" 버튼을 직접 눌러 이동해보세요`;
+    navLabel = `${arrow} ${dir} "${TAB_META[step.tab] ? TAB_META[step.tab].label : '더보기'}" 버튼을 직접 눌러 이동해보세요`;
     waitTab = step.tab;
   } else if (currentTab !== 'more') {
     navTarget = `[data-tab="more"]`;
-    navLabel = `👇 아래 "더보기" 버튼을 먼저 눌러주세요`;
+    navLabel = `${arrow} ${dir} "더보기" 버튼을 먼저 눌러주세요`;
     waitTab = 'more';
   } else {
     navTarget = `[data-goto="${step.tab}"]`;
-    navLabel = `👇 "${TAB_META[step.tab].label}"을 직접 눌러 이동해보세요`;
+    navLabel = `👉 "${TAB_META[step.tab].label}"을 직접 눌러 이동해보세요`;
     waitTab = step.tab;
   }
   document.getElementById('tutorial-img').src = `/mascot/${step.img}.png`;
@@ -2642,7 +2670,7 @@ renderers.factcheck = function() {
     <p class="text-xs text-muted mb-4">지금 하려는 투자를 입력하면, 등록된 나의 원칙에 비추어 AI가 냉철하게 검증합니다. 매수 전 검증뿐 아니라, 관심 있는 종목이 왜 오르거나 내렸는지·궁금한 점을 자유롭게 물어봐도 좋아요.</p>
 
     <div class="card p-4 mb-4 space-y-3">
-      <div><label class="text-xs text-muted mb-1 block">종목명 / 종목코드</label><input id="fc-ticker" type="text" placeholder="예: 삼성전자, 테슬라, 005930, TSLA"></div>
+      <div><label class="text-xs text-muted mb-1 block">종목명 / 종목코드 <span class="text-bad">*</span></label><input id="fc-ticker" type="text" placeholder="예: 삼성전자, 테슬라, 005930, TSLA"></div>
       <div class="grid grid-cols-2 gap-3">
         <div><label class="text-xs text-muted mb-1 block">시장 <span class="text-[10px] font-normal">· 종목명 입력 시 자동</span></label>
           <select id="fc-exchange">
@@ -2655,7 +2683,7 @@ renderers.factcheck = function() {
         <div><label class="text-xs text-muted mb-1 block">매수 예정 수량</label><input id="fc-qty" type="number" placeholder="예: 10 (주)"></div>
       </div>
       <p id="fc-price-preview" class="text-xs text-muted"></p>
-      <div><label class="text-xs text-muted mb-1 block">왜 지금 사려고 하나요? (또는 궁금한 점을 자유롭게)</label>
+      <div><label class="text-xs text-muted mb-1 block">왜 지금 사려고 하나요? (또는 궁금한 점을 자유롭게) <span class="text-bad">*</span></label>
         <textarea id="fc-reason" placeholder="예: 오늘 급등했는데 더 오를 것 같아서 / 왜 오늘 이렇게 떨어졌는지 궁금해요"></textarea>
       </div>
       <button id="fc-run" class="btn-brand w-full py-3.5 rounded-xl text-sm font-bold">${canUseAI() ? '냉철하게 검증받기' : '로그인하고 검증받기'}</button>
@@ -2933,8 +2961,8 @@ function openTradeForm(h) {
       <div class="seg mb-4" id="trade-seg"><button data-m="buy" class="${mode==='buy'?'active':''}">매수</button><button data-m="sell" class="${mode==='sell'?'active':''}">매도</button></div>
       <p class="text-xs text-muted mb-3">현재 보유: ${h.quantity}주 · 평단 ${fmtPrice(h.avgPrice,cur)}</p>
       <div class="space-y-3">
-        <div><label class="text-xs text-muted mb-1 block">수량</label><input id="tf-qty" type="number" placeholder="주식 수"></div>
-        <div><label class="text-xs text-muted mb-1 block">${mode==='buy'?'매수':'매도'} 가격 (${cur} 기준, 1주당)</label><input id="tf-price" type="number" step="0.01" value="${h.currentPrice}"></div>
+        <div><label class="text-xs text-muted mb-1 block">수량 <span class="text-bad">*</span></label><input id="tf-qty" type="number" placeholder="주식 수"></div>
+        <div><label class="text-xs text-muted mb-1 block">${mode==='buy'?'매수':'매도'} 가격 (${cur} 기준, 1주당) <span class="text-bad">*</span></label><input id="tf-price" type="number" step="0.01" value="${h.currentPrice}"></div>
       </div>
       <div id="trade-preview" class="row p-3 mt-3 text-xs text-muted">수량과 가격을 입력하면 결과 미리보기가 표시됩니다.</div>
     `, `
@@ -3002,7 +3030,7 @@ function openHoldingForm(existing) {
   const isNew = !existing;
   openModal(isNew ? '종목 추가 (최초 매수)' : '종목 정보 수정', `
     <div class="space-y-3">
-      <div><label class="text-xs text-muted mb-1 block">종목명</label><input id="hf-name" type="text" value="${escapeHtml(h.name)}" placeholder="예: 삼성전자"></div>
+      <div><label class="text-xs text-muted mb-1 block">종목명 <span class="text-bad">*</span></label><input id="hf-name" type="text" value="${escapeHtml(h.name)}" placeholder="예: 삼성전자"></div>
       <div><label class="text-xs text-muted mb-1 block">구분</label>
         <select id="hf-type"><option value="core" ${h.type==='core'?'selected':''}>코어 (핵심 장기보유)</option><option value="satellite" ${h.type==='satellite'?'selected':''}>알파 (전술적 비중)</option></select>
         <p id="hf-type-hint" class="text-[10px] text-muted mt-1 hidden"></p>
@@ -3015,13 +3043,13 @@ function openHoldingForm(existing) {
       </div>
       ${isNew ? `
       <div class="grid grid-cols-2 gap-3">
-        <div><label class="text-xs text-muted mb-1 block">수량</label><input id="hf-qty" type="number" value="${h.quantity}"></div>
-        <div><label class="text-xs text-muted mb-1 block">평균 매입가</label><input id="hf-avg" type="number" step="0.01" value="${h.avgPrice}" placeholder="선택한 통화 기준"></div>
+        <div><label class="text-xs text-muted mb-1 block">수량 <span class="text-bad">*</span></label><input id="hf-qty" type="number" value="${h.quantity}"></div>
+        <div><label class="text-xs text-muted mb-1 block">평균 매입가 <span class="text-bad">*</span></label><input id="hf-avg" type="number" step="0.01" value="${h.avgPrice}" placeholder="선택한 통화 기준"></div>
       </div>
       ` : `
       <div class="row p-3 text-xs text-muted">현재 보유 ${h.quantity}주 · 평단 ${fmtPrice(h.avgPrice,h.currency)}<br>수량·평단 변경은 목록의 '거래하기'를 이용해주세요.</div>
       `}
-      <div><label class="text-xs text-muted mb-1 block">현재가 (수동 조정, 시세 연동 시 자동 갱신, 선택한 통화 기준)</label><input id="hf-cur" type="number" step="0.01" value="${h.currentPrice}"></div>
+      <div><label class="text-xs text-muted mb-1 block">현재가 (수동 조정, 시세 연동 시 자동 갱신, 선택한 통화 기준) <span class="text-bad">*</span></label><input id="hf-cur" type="number" step="0.01" value="${h.currentPrice}"></div>
       <div class="border-t border-line pt-3">
         <p class="text-xs text-muted mb-2">📡 시세 자동 연동 (선택) — 종목코드를 입력하면 하루 1회 자동으로, 또는 수동 새로고침으로 현재가가 업데이트됩니다</p>
         <div class="grid grid-cols-2 gap-3">
@@ -3113,7 +3141,7 @@ function openCashFlowModal(mode, editingId) {
     </div>`}
     <div class="space-y-3 mb-4">
       <div class="flex gap-2">
-        <div class="flex-1"><label class="text-xs text-muted mb-1 block">${mode==='deposit'?'입금액':'출금액'}</label><input id="cf-amount" type="number" placeholder="예: 1000000" value="${editing ? (editing.originalAmount ?? Math.abs(editing.amountKRW)) : ''}"></div>
+        <div class="flex-1"><label class="text-xs text-muted mb-1 block">${mode==='deposit'?'입금액':'출금액'} <span class="text-bad">*</span></label><input id="cf-amount" type="number" placeholder="예: 1000000" value="${editing ? (editing.originalAmount ?? Math.abs(editing.amountKRW)) : ''}"></div>
         <div style="width:96px"><label class="text-xs text-muted mb-1 block">통화</label>
           <select id="cf-currency">
             <option value="KRW" ${(!editing||editing.currency!=='USD')?'selected':''}>원화 (₩)</option>
@@ -3245,8 +3273,8 @@ renderers.principles = function() {
 function openPrincipleForm() {
   openModal('나만의 원칙 작성', `
     <div class="space-y-3">
-      <div><label class="text-xs text-muted mb-1 block">제목</label><input id="pf-title" type="text" placeholder="예: 이해 못하는 사업엔 투자하지 않는다"></div>
-      <div><label class="text-xs text-muted mb-1 block">내용</label><textarea id="pf-body" placeholder="구체적인 기준을 적어주세요"></textarea></div>
+      <div><label class="text-xs text-muted mb-1 block">제목 <span class="text-bad">*</span></label><input id="pf-title" type="text" placeholder="예: 이해 못하는 사업엔 투자하지 않는다"></div>
+      <div><label class="text-xs text-muted mb-1 block">내용 <span class="text-bad">*</span></label><textarea id="pf-body" placeholder="구체적인 기준을 적어주세요"></textarea></div>
     </div>
   `, `
     <button class="btn-ghost px-4 py-2.5 rounded-xl text-sm" onclick="closeModal()">취소</button>
@@ -3460,7 +3488,7 @@ function openJournalForm(existing) {
         <select id="jf-mood">${Object.entries(MOODS).map(([k,v])=>`<option value="${k}" ${existing&&existing.mood===k?'selected':''}>${v}</option>`).join('')}</select>
       </div>
       <div><label class="text-xs text-muted mb-1 block">제목 (선택)</label><input id="jf-title" type="text" value="${existing?escapeHtml(existing.title||''):''}" placeholder="예: 급락장에서 흔들렸던 하루"></div>
-      <div><label class="text-xs text-muted mb-1 block">내용</label><textarea id="jf-content" placeholder="오늘 어떤 판단을 했고, 왜 그랬는지 적어보세요">${existing?escapeHtml(existing.content||''):''}</textarea></div>
+      <div><label class="text-xs text-muted mb-1 block">내용 <span class="text-bad">*</span></label><textarea id="jf-content" placeholder="오늘 어떤 판단을 했고, 왜 그랬는지 적어보세요">${existing?escapeHtml(existing.content||''):''}</textarea></div>
       <div>
         <label class="text-xs text-muted mb-1 block">사진 첨부 (선택)</label>
         <input id="jf-photo" type="file" accept="image/*" multiple class="text-xs">
