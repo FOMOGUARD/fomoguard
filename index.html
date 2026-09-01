@@ -1095,7 +1095,8 @@ document.getElementById('modal-root').addEventListener('click', e => { if (e.tar
 /* ---------------- 섹션 설명 아이콘 ---------------- */
 const SECTION_INFO = {
   heroAsset: { title: '총 평가 자산이 뭔가요?', body: '지금 보유한 모든 종목의 평가금액과 현금 잔고를 합친 값이에요. "누적"은 처음 투자를 시작한 뒤로 지금까지의 전체 수익률, "전일대비"는 어제 종가 대비 오늘 하루 동안의 변화예요.' },
-  coreAlpha: { title: '코어·알파가 뭔가요?', body: '코어는 오래 들고 갈 든든한 종목(대형주, 지수 추종 등), 알파는 더 공격적으로 수익을 노려보는 종목이에요. 종목을 등록할 때 직접 정할 수 있고, 티커·종목명을 보고 자동으로 추천해드리기도 해요.' },
+  coreAlpha: { title: '코어·알파가 뭔가요?', body: '코어는 오래 들고 갈 든든한 종목(대형주, 지수 추종 등), 알파는 더 공격적으로 수익을 노려보는 종목이에요. 종목을 등록할 때 직접 정할 수 있고, 티커·종목명을 보고 자동으로 추천해드리기도 해요.<br><br>⚠️ 이 수익률은 <b>지금 보유 중인 종목만</b> 반영해요. 종목을 매도(현금화)하면 그 순간 이 계산에서 빠지기 때문에 수치가 바뀔 수 있어요 — "누적 손익금액"과는 다른 지표예요.' },
+  totalPnl: { title: '누적 손익금액이 뭔가요?', body: '지금 보유 중인 종목의 평가손익(아직 안 판 것)과, 과거에 매도해서 실제로 확정된 실현손익(이미 판 것)을 <b>모두 합친 전체 누적</b> 값이에요.<br><br>그래서 수익 난 종목을 팔아 현금화해도 이 숫자는 바뀌지 않아요 — 평가손익이 실현손익으로 자리만 옮길 뿐, 합계는 그대로예요. 반대로 "코어/알파 포트폴리오 수익률"은 지금 보유 중인 것만 보기 때문에 매도하면 값이 바뀌어요.' },
   treemap: { title: '자산 트리맵이 뭔가요?', body: '내 포트폴리오를 사각형 타일로 표현한 지도예요. 타일 크기는 그 종목이 전체에서 차지하는 비중이고, 색은 선택한 기준(누적 수익률 또는 오늘 하루 변화)에 따라 빨강(상승)·파랑(하락)으로 표시돼요. "오늘 변화"를 고르면 finviz 같은 실시간 히트맵처럼 오늘 하루 등락만 볼 수 있어요.' },
   donutShare: { title: '비중 차트가 뭔가요?', body: '전체 자산에서 각 종목(또는 코어·알파 구분)이 차지하는 비율을 원그래프로 보여줘요. 한 종목에 너무 쏠려있지 않은지 확인할 때 유용해요.' },
   contribution: { title: '수익 기여도가 뭔가요?', body: '각 종목이 내 전체 손익에 실제로 얼마나 기여했는지(원화 기준 금액)를 보여줘요. 수익률이 높아도 투자한 비중이 작으면 기여도는 낮을 수 있어요.' },
@@ -2547,9 +2548,9 @@ renderers.dashboard = function() {
         <p class="text-[9px] text-brand font-semibold mt-0.5">탭해서 입출금 →</p>
       </button>
       <div class="row p-3"><p class="text-[10px] text-muted mb-1">총 매수금액</p><p class="text-sm font-bold">${fmtWon(totalCost)}</p></div>
-      <div class="row p-3"><p class="text-[10px] text-muted mb-1">총 손익금액</p><p class="text-sm font-bold ${pnlColor}">${totalPnl>=0?'+':''}${fmtWon(totalPnl)}</p></div>
+      <div class="row p-3"><p class="text-[10px] text-muted mb-1">누적 손익금액${infoIcon('totalPnl')}</p><p class="text-sm font-bold ${pnlColor}">${totalPnl>=0?'+':''}${fmtWon(totalPnl)}</p></div>
       <div class="row p-3"><p class="text-[10px] text-muted mb-1">코어 포트폴리오 수익률${infoIcon('coreAlpha')}</p><p class="text-sm font-bold ${coreColor}">${coreCost>0?fmtPct(coreReturnPct):'-'}</p></div>
-      <div class="row p-3"><p class="text-[10px] text-muted mb-1">알파 포트폴리오 수익률</p><p class="text-sm font-bold ${satColor}">${satCost>0?fmtPct(satReturnPct):'-'}</p></div>
+      <div class="row p-3"><p class="text-[10px] text-muted mb-1">알파 포트폴리오 수익률${infoIcon('coreAlpha')}</p><p class="text-sm font-bold ${satColor}">${satCost>0?fmtPct(satReturnPct):'-'}</p></div>
     </div>
     <button id="btn-refresh-market" class="text-[11px] text-brand font-semibold mb-4 flex items-center gap-1">🔄 환율·시세·지수·뉴스 새로고침</button>`,
     market: `
