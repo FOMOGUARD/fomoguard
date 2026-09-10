@@ -24,6 +24,7 @@ create table if not exists public.fomoguard_growth (
   updated_at timestamptz not null default now()
 );
 alter table public.fomoguard_growth enable row level security;
+drop policy if exists "select own growth" on public.fomoguard_growth;
 create policy "select own growth" on public.fomoguard_growth for select using (auth.uid() = user_id);
 -- insert/update 정책은 의도적으로 만들지 않습니다 (클라이언트가 테이블에 직접 쓸 수 없게).
 -- 값 변경은 아래 security definer 함수를 통해서만 가능합니다.
